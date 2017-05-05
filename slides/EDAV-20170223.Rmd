@@ -1,0 +1,347 @@
+---
+title: "EDAV-20170223"
+author: "Joyce Robbins"
+date: "2/21/2017"
+output: html_document
+---
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, cache = TRUE)
+```
+
+
+```{r, echo = FALSE, warning = FALSE, message = FALSE}
+library(ggplot2)
+library(gridExtra)
+library(tidyr)
+library(vcdExtra) # Yamaguchi87
+library(dplyr) # keep after vcdExtra to avoid summarise conflict
+library(knitr)
+library(viridis)
+library(ggthemes)
+library(oce) # colors
+library(purrr)
+library(pgmm) # wine
+library(heatmaply)
+library(tibble)
+library(RColorBrewer)
+```
+
+```{r}
+data("colors")
+data("wine")
+index <- seq(1, 256, length.out = 27)
+mycolors <- colors$viridis[index]   # oce package
+stars(wine[,2:28], labels = wine$Type, draw.segments = TRUE,
+      col.segments  = mycolors)
+```
+
+
+```{r, fig.width = 10}
+winetypes <- c("Barolo", "Grignolino", "Barbera")
+oldpar <- par(mfrow = c(1, 3))
+index <- seq(1, 256, 9)
+mycolors <- colors$viridis[index]
+for (i in 1:3) {
+    winedf <- wine %>% filter(Type == i) %>% select(-Type)
+stars(winedf, labels = NULL, draw.segments = TRUE,
+      col.segments  = mycolors)
+mtext(winetypes[i], side = 3, line = -4)
+}
+par(oldpar)
+```
+
+```{r, fig.width = 10}
+mycolors <- data.frame(colors, stringsAsFactors = FALSE)[index,1:3] 
+oldpar <- par(mfrow = c(1, 3))
+for (i in 1:3) {
+    winedf <- wine %>% filter(Type == i) %>% select(-Type)
+stars(winedf, labels = NULL, draw.segments = TRUE,
+      col.segments  = mycolors[,i])
+mtext(winetypes[i], side = 3, line = -4)
+}
+par(oldpar)
+```
+
+
+```{r}
+# reduce number of variables
+index <- seq(1, 256, length.out = 4)
+mycolors <- colors$viridis[index]   # oce package
+stars(wine[,2:5], labels = wine$Type, draw.segments = TRUE,
+      col.segments  = mycolors)
+```
+
+
+```{r}
+# geom_tile with numerical data, compare to geom_point
+x <- 1:3
+y <- c(5, 2, 7)
+df <- data.frame(x, y)
+g1 <- ggplot(df, aes(x, y)) + geom_point()
+g2 <- ggplot(df, aes(x, y)) + geom_tile()
+grid.arrange(g1, g2, nrow = 1)
+```
+
+```{r}
+# geom_tile with categorical data, no fill
+ggplot(Yamaguchi87, aes(Father, Son)) + geom_tile()
+```
+
+```{r}
+# add fill, reorder factor levels
+occmob <- Yamaguchi87
+orderedclasses <- c("Farm", "LoM", "UpM", "LoNM", "UpNM")
+occmob$Father <- factor(occmob$Father, levels = orderedclasses)
+occmob$Son <- factor(occmob$Son, levels = orderedclasses)
+occmoball <- occmob %>%  group_by(Father, Son) %>% 
+    dplyr::summarise(Freq = sum(Freq))
+
+```
+
+```{r}
+ggplot(occmoball, aes(Father, Son, fill = Freq)) + 
+    geom_tile() 
+```
+
+```{r}
+# add text labels
+ggplot(occmoball, aes(Father, Son, fill = Freq)) + 
+    geom_tile() +
+    geom_text(aes(label = Freq), color = "white",
+              size = 5)
+```
+
+
+```{r}
+# change colors
+occmoball <- occmoball %>% 
+    mutate(textcolor = ifelse(Freq < 3000, "white", "black"))
+ggplot(occmoball, aes(Father, Son, fill = Freq)) + 
+    geom_tile() + 
+    geom_text(aes(label = Freq, color = textcolor),
+              size = 5) +
+    scale_color_manual(values = c("black", "white")) +
+    scale_fill_distiller(name = "frequency", palette = "PuBu") +
+    guides(color = FALSE) 
+
+```
+
+```{r}
+# create heat map theme
+theme_heat <- theme_classic(14) +
+    theme(axis.line = element_blank(),
+          axis.ticks = element_blank())
+```
+
+
+```{r}
+# single color, alpha = Freq
+ggplot(occmoball, aes(Father, Son, alpha = Freq)) + 
+    geom_tile(fill = "red") + coord_equal() +
+    theme_heat
+
+```
+
+
+```{r, fig.width = 9}
+# facet by country, can't see much in Japan
+occmobcountry <- occmob %>%
+    group_by(Father, Son, Country) %>% 
+    dplyr::summarise(Freq = sum(Freq))
+ggplot(occmobcountry, aes(Father, Son, fill = Freq)) + 
+    geom_tile() +
+    geom_text(aes(label = Freq), color = "white") +
+    facet_wrap(~Country)
+```
+
+```{r, fig.width = 9}
+# switch to percentage of country total
+country_totals <- occmobcountry %>% group_by(Country) %>% 
+    dplyr::summarise(Total = sum(Freq))
+occmobcountry <- occmobcountry %>% 
+    mutate(Total = country_totals$Total[Country])
+ggplot(occmobcountry, aes(Father, Son, fill = Freq/Total)) + 
+    geom_tile() +
+    geom_text(aes(label = Freq), color = "white") +
+    facet_wrap(~Country)
+```
+
+```{r, fig.width = 9}
+# new color scheme
+ggplot(occmobcountry, aes(Father, Son, fill = Freq/Total)) + 
+    geom_tile() +
+    facet_wrap(~Country) +
+    scale_fill_viridis()
+```
+
+```{r, fig.width = 9}
+# only use upper half of the scale
+ggplot(occmobcountry, aes(Father, Son, fill = Freq/Total)) + 
+    geom_tile() +
+    facet_wrap(~Country) +
+    scale_fill_viridis(begin = .5)
+```
+
+```{r, fig.width = 9}
+# color experiments with oce package
+# library(oce)
+data("colors")
+mycol <- data.frame(colors)
+colornames <- colnames(mycol)
+for (i in 1:13) {
+g <- ggplot(occmobcountry, aes(Father, Son, fill = Freq/Total)) + 
+    geom_tile() +
+    facet_wrap(~Country) + 
+    scale_fill_gradientn(colors = mycol[,i]) + 
+    ggtitle(paste(colnames(mycol[i])))
+print(g)
+}
+```
+
+
+
+
+
+```{r, eval = FALSE, echo = FALSE}
+# https://www.currentresults.com/Weather/US/average-annual-state-temperatures.php
+# variables with different scales
+library(ggplot2)
+library(dplyr)
+library(tidyr)
+state <- c("FL", "NJ", "NY")
+lettercount <- c(7, 9, 7)
+temp <- c(70.7, 52.7, 45.4)
+df <- data.frame(state, lettercount, temp) 
+tidydf <- df %>% gather(key, value, -state)
+ggplot(tidydf, aes(key, state, fill = value)) + 
+    geom_tile(color = "white") +
+    coord_equal() + theme_heat
+```
+
+
+```{r, eval = FALSE, echo = FALSE}
+ggplot(tidydf, aes(key, state, fill = value)) + 
+    geom_tile(color = "white") +
+    coord_equal() +
+    scale_fill_viridis() + theme_heat
+```
+
+```{r, eval = FALSE, echo = FALSE}
+# scale the data
+vscale <- function(x) as.vector(scale(x))
+tidyscaleddf <- tidydf %>% group_by(key) %>%
+    mutate(scaledvalue = vscale(value))
+ggplot(tidyscaleddf, aes(key, state, fill = scaledvalue)) + 
+    geom_tile(color = "white") +
+        geom_text(aes(label = value), color = "white") +
+    coord_equal() + 
+    scale_fill_viridis() + theme_heat
+```
+
+```{r}
+state <- c("FL", "NJ", "NY")
+lettercount <- c(7, 9, 7)
+temp <- c(70.7, 52.7, 45.4)
+df <- data.frame(state, lettercount, temp)
+statemat <- df 
+rownames(statemat) <- df$state
+statemat <- as.matrix(statemat %>% select(-state))
+heatmap(statemat)
+heatmap(statemat, scale = "column", margins = c(12, 12),
+        cexRow = 2, cexCol = 2, col = colors$viridis)
+```
+
+### wine dataset
+```{r}
+heatmap(as.matrix(wine))
+heatmap(t(as.matrix(wine)), scale = "row",
+        col = colors$viridis)
+```
+
+### heatmaply
+```{r}
+# library(heatmaply)
+heatmaply(mtcars, dendrogram = "none") %>% 
+    layout(margin = list(l = 130, b = 40))
+
+```
+
+
+```{r}
+data("olive")
+heatmaply(olive, scale = "column")
+```
+
+```{r}
+tidyolive <- olive %>% rownames_to_column("ID") %>% 
+    gather(key, value, -ID, -Region, -Area)
+ggplot(tidyolive, aes(key, ID, fill = value)) + 
+    geom_tile() +
+    scale_fill_viridis() + theme_heat +
+    theme(axis.text.y = element_blank())
+```
+
+```{r}
+# scale the data
+vscale <- function(x) as.vector(scale(x))
+tidyolivescaled <- tidyolive %>% group_by(key) %>%
+    mutate(scaledvalue = vscale(value))
+g <- ggplot(tidyolivescaled, aes(key, ID, fill = scaledvalue)) + 
+    geom_tile() +
+    scale_fill_viridis() + theme_heat +
+    theme(axis.text.y = element_blank())
+g 
+```
+
+```{r}
+g + facet_wrap(~Region, nrow =3, scales = "free_y")
+```
+
+```{r}
+# non perceptually uniform color space
+mycolors <- c("darkolivegreen2", "darkolivegreen3", "darkolivegreen4")
+x <- rep("value", 3)
+y <- factor(1:3)
+z <- factor(c(10, 15, 80))
+df <- data.frame(x, y, z)
+ggplot(df, aes(x, y)) + geom_tile(aes(fill = z)) +
+    geom_text(aes(label = z), size = 5) +
+    scale_fill_manual(values = mycolors) +
+    guides(fill = FALSE) + theme_classic()
+```
+
+
+```{r}
+z <- c(10, 15, 80)
+df <- data.frame(x, y, z)
+ggplot(df, aes(x, y)) + geom_tile(aes(fill = z)) +
+    geom_text(aes(label = z), size = 5, color = "white") +
+    scale_fill_viridis() + theme_classic() 
+```
+
+```{r}
+# ?oce.colorsTwo{oce}
+x <- array(1:1000, dim=c(1,1000))
+oldpar <- par(mfrow=c(1,5), mar=c(1, 3, 3, 1))
+image(x, col=oce.colorsTwo(200), main="oce.colorsTwo")
+image(x, col=oce.colorsJet(200), main="oce.colorsJet")
+image(x, col=oce.colorsGebco(200), main="oce.colorsGebco")
+image(x, col=oce.colorsPalette(200), main="oce.colorsPalette")
+image(x, col=oce.colorsViridis(200), main="oce.colorsViridis")
+# 4. Kristen M Thyng's 'cmocean' colours, specialised for oceanography.
+par(mfrow=c(3,4), mar=c(1, 3, 3, 1))
+image(x, col=oce.colorsCDOM(200), main="oce.colorsCDOM")
+image(x, col=oce.colorsChlorophyll(200), main="oce.colorsChlorophyll")
+image(x, col=oce.colorsDensity(200), main="oce.colorsDensity")
+image(x, col=oce.colorsFreesurface(200), main="oce.colorsFreesurface")
+image(x, col=oce.colorsOxygen(200), main="oce.colorsOxygen")
+image(x, col=oce.colorsPAR(200), main="oce.colorsPAR")
+image(x, col=oce.colorsPhase(200), main="oce.colorsPhase")
+image(x, col=oce.colorsSalinity(200), main="oce.colorsSalinity")
+image(x, col=oce.colorsTemperature(200), main="oce.colorsTemperature")
+image(x, col=oce.colorsTurbidity(200), main="oce.colorsTurbidity")
+image(x, col=oce.colorsVelocity(200), main="oce.colorsVelocity")
+image(x, col=oce.colorsVorticity(200), main="oce.colorsVorticity")
+par(oldpar)
+```
+
