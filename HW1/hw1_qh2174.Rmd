@@ -1,6 +1,12 @@
 ---
 title: "EDA Homework1"
 output:
+  html_document: 
+    number_sections: True
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
   html_notebook: 
     number_sections: True
     toc: yes
