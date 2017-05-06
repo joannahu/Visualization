@@ -1,0 +1,534 @@
+---
+title: "Analyzing 45 Million Amazon.com user ratings"
+output:
+  prettydoc::html_pretty: null
+  highlight: github
+  theme: cayman
+---
+
+
+**By: Michael Di Amore (mad2271), Aravind Sadagopan (as5195), Amir Rahmani (ar3717)**
+
+### 1. Introduction
+
+The motivation behind the project is to primarily explore and visualize big-data sets. The idea is to tackle the inherent challenges in terms of data-processing, feature extraction, out-of-core data aggregation to explore and visualize patterns in huge datasets. Our analysis pertains to a subset of publicly available amazon data found here at http://jmcauley.ucsd.edu/data/amazon/ . The team spoke to the author Julian Macualey who provided us links to full dataset and the metadata table which contains the product and pricing info for research purposes (citation for use of data provided below ) The original data consists of 142.8 million reviews and 83.8 million ratings across 24 categories spanning May 1996 - July 2014 from Amazon.com website and a separate metadata which contains 5.2 million product metadata
+
+The Amazon review data set is a semi-structured multi-table json file of reviews and ratings of various amazon products across multiple categories. For the purpose of this project we leveraged Amazon EC2 to preprocess the entire dataset (python script used for preprocessing data included) to restrict our focus to following categories.
+
+- Books
+- Electronics
+- Cellphone and Accessories
+- Automotive
+- Baby
+- Beauty
+- Tools and Home Improvement 
+- Clothing, Shoes & Jewelry
+
+
+The final dataset for this project has 45.7 million reviews (across 8 product categories) cross-referenced with the 5.2 million product metadata. This also reduced the dataset size from 18 GB to 5 GB.
+
+Our intention beyond the obvious data engineering and feature extraction challenges is to answer few motivating questions like:-
+
+1. Does average product rating converge to 3 stars or is it concentrated at extremes as only excited or unhappy customers take time to review?
+
+2. Do ratings and product categories have some correlation? For example, do Baby products have extreme ratings compared other categories as they tend to have higher expectations/concerns towards products?
+
+3. Do reviewer activity correlate with festival shopping activity (Black Friday, Christmas etc.) or is there a lag effect?
+
+4. What is the average price of a product that gets extreme reviews? Does the price of product have an effect on the sentiment of the customer?
+
+##### _Citation_
+_Image-based recommendations on styles and substitutes J. McAuley, C. Targett, J. Shi, A. van den Hengel
+SIGIR, 2015_
+
+_Inferring networks of substitutable and complementary products J. McAuley, R. Pandey, J. Leskovec
+Knowledge Discovery and Data Mining, 2015)_
+
+### 2. Team
+
+- Michael Di Amore (mad2271)
+- Aravind Sadagopan (as5195)
+- Amir Rahmani (ar3717)
+
+The nature of the project required us to be highly collaborative. Beyond the preprocessing of raw data, the team did collaborate on every aspect on the project including the final report. The team members often analyzed the data independently and we met once a week to share our findings/analysis and to decide on which aspects of our analysis we wanted to include/further analyze. 
+
+### 3. Analysis of Data Quality
+
+#### 3.1 Raw Data to Project Dataset
+
+The following workflow illustrates the conversion pipeline from raw data to the final dataset used for this project
+
+
+![Data Preprocessing pipeline](data_preprocessing.png)
+
+
+__Python Preprocessing code__
+
+```
+import os
+import glob
+import csv
+
+import pandas as pd
+import gzip
+
+def parse(path):
+    g = gzip.open(path, 'rb')
+    for l in g:
+        yield eval(l)
+
+def getDF(path):
+    i = 0
+    df = {}
+    for d in parse(path):
+        df[i] = d
+        i += 1
+    return pd.DataFrame.from_dict(df, orient='index')
+
+# Read Metadata JSON file to metadata csv
+with open('metadata.csv','w') as meta:
+    meta_writer = csv.writer(meta)
+    meta_writer.writerow(['asin', 'title', 'price'])
+    for review in parse("metadata.json.gz"):
+        if 'asin' in review:
+            asin = review['asin']
+        else:
+            continue
+        if 'title' in review:
+            title = review['title']
+        else:
+            title = 'NA'
+        if 'price' in review:
+            price = review['price']
+        else:
+            price = 'NA'
+        meta_writer.writerow([asin, title, price])
+
+metdata = pd.read_csv('metadata.csv')
+cat_files = glob.glob("./reviewdata/ratings*.csv")
+for filename in cat_files:
+    cat_data = pd.read_csv(filename, header=None, 
+                        names=['uid','asin','rating','timestamp'])
+    cat_out = cat_data.merge(metdata)
+    category_name = os.path.basename(filename)
+    cat_out.to_csv('output/' + category_name,index=False)
+
+want_header = True
+out_filename = "./output/amazon_ratings_full.csv"
+
+if os.path.exists(out_filename):
+    os.remove(out_filename)
+
+read_files = glob.glob("./output/*.csv")
+
+with open(out_filename, "w") as outfile:
+    for filename in read_files:
+        category = os.path.basename(filename).split('.')[0]
+        with open(filename) as infile:
+            if want_header:
+                outfile.write('{},Category\n'.format(next(infile).strip()))
+                want_header = False
+            else:
+                next(infile)
+            for line in infile:
+                outfile.write('{},{}\n'.format(line.strip(), category))
+
+```
+
+#### 3.2 Data Schema
+
+The final schema for the merged data for ratings is illustrated below
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+library(knitr)
+theme_color = "#339900" #"#9e66ab"
+schema <- read.csv('schema.csv')
+kable(schema)
+```
+
+#### 3.3 Total Rows & Missing Values in Data
+
+The dataset has 45.7 million ratings and has complete values for all fields except for the price and title  of certain products highlighted below
+```{r include=FALSE, echo=FALSE, warning=FALSE, error=FALSE, results='hide'}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(lubridate)
+library(gridExtra)
+#setwd("C:/ColumbiaUniversity/Semester2/ExploratoryDataAnalysisVisualization/project/mike/notebook - Copy/notebook - Copy")
+#full_data <- read_csv('amazon_ratings_full.csv')
+
+#full_data$date <- dt<-as.POSIXct(full_data$timestamp,origin="1970-01-01",tz="GMT")
+```
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+total_rows <- readRDS('total_rows.rds')
+kable(t(total_rows), caption = "Summary of Ratings ")
+```
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+missing_values <- readRDS('missing_values.rds')
+kable(t(missing_values), caption = "Missing Value Summary")
+```
+
+#### 3.4 Data Summary
+
+##### 3.4.1 Distribution of Ratings
+From the datatset, 4 and 5 star reviews dominate compared to 1 and 2 star ratings. Amazon has 6 times very happy customers compared to very unhappy ones. The distribution is not concentrated around extremely happy and unhappy costumers.
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+count_by_ratings <- readRDS('count_by_rating.rds')
+
+ggplot(data=count_by_ratings,aes(x=rating, y=count)) + 
+  geom_col(fill=theme_color, alpha=0.9) + 
+  xlab("Amazon Reviewer Rating") +
+  ylab("Count") +
+  ggtitle("Distribution of Ratings")
+```
+
+##### 3.4.2 Distribution of Categories
+
+Books dominate the ratings in this dataset followed by Electronics. Baby products have the fewest ratings
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+count_by_categories <- readRDS('count_by_categories.rds')
+count_by_categories <- count_by_categories %>% arrange(desc(count))
+count_by_categories$Category <- factor(count_by_categories$Category, levels=rev(count_by_categories$Category))
+ggplot(data=count_by_categories,aes(x=Category, y=count)) + 
+  geom_col(fill=theme_color, alpha=0.9) + 
+  xlab("Amazon Product Category") +
+  ylab("Count") +
+  ggtitle("Distribution of Categories") +
+  coord_flip()
+
+```
+
+##### 3.4.3 Distribution of Prices
+The distribution of product prices is heavily skewed. 1.6 million products do not have price values and for the non-nll values, the median price is $13.92, mean is $33.99 with max value of $1000. The products have a long tail in terms of prices
+
+```{r echo=FALSE, warning=FALSE, error=FALSE,message=FALSE}
+prices <- readRDS('price_data.rds')
+prices = as.data.frame(prices)
+summary_prices <- summary(prices$prices)
+kable(t(summary_prices))
+
+```
+
+```{r echo=FALSE, warning=FALSE,message=FALSE}
+ggplot(data=prices, aes(x=prices)) + geom_density(color=theme_color, alpha=0.9) +
+  xlab("Price of Item") +
+  ylab("Density") +
+  ggtitle(" Density Plot of Prices of Products")
+```
+
+Now let's examine the distribution of some of the more interesting individual categories, let's look at books and electronics
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+book_prices = readRDS('book_prices.rds')
+book_prices <- as.data.frame(book_prices)
+book_prices <- na.omit(book_prices)
+ggplot(data=book_prices, aes(x=book_prices)) + geom_density(color=theme_color, alpha=0.9) +
+  xlab("Price of Book") +
+  ylab("Density") +
+  ggtitle(" Density Plot of Prices of Books")
+```
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+electronic_prices = readRDS('electronic_prices.rds')
+electronic_prices <- as.data.frame(electronic_prices)
+electronic_prices <- na.omit(electronic_prices)
+ggplot(data=electronic_prices, aes(x=electronic_prices)) + geom_density(color=theme_color, alpha=0.9) +
+  xlab("Price of Electronics") +
+  ylab("Density") +
+  ggtitle(" Density Plot of Prices of Electronics")
+
+
+```
+
+Somewhat surprising, at first glance, is the price distribution of electronics and how similar it is to the price distribution of books. However, if we look at the axis we notice that "cheap" electronics are only 3% of the density while "cheap" books are about 10% of the density. Which makes sense as we would expect on average the cost of electronics to be more than the cost of books. One extra piece of information we can gleam is the overall shape of the distributions, this looks obviously not standard normal, but possibly in the gamma family.
+
+
+##### 3.4.4 Distribution of per user Ratings
+
+The below chart shows that 55% of the entire reviewer base in data set provides only 1 review rating, 73% of the reviewer base provides less than 2 reviews and 90% of the base provides less than 5 reviews. However there are active reviewers with one reviewer providing __43,202 reviews__
+and top 10 reviewers with more than 4000 reviews each.
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+review_count <- readRDS("review_counts.rds")
+cum_reviews <- review_count %>% mutate(normalize = total/sum(total), proportion = cumsum(normalize)) %>% filter((reviews <= 75))
+ggplot(cum_reviews, aes(x=reviews, y=proportion)) +
+  geom_line(color=theme_color) +
+  xlab("No of Ratings per User") +
+  ylab("Cumulative Proportion") +
+  ggtitle(" Cumulative Distribution of Number of Ratings per user")
+
+```
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+reviews_by_user <- readRDS('reviews_by_user_top10.rds')
+
+kable(reviews_by_user, caption = "Top 10 reviewers")
+```
+
+
+### 4. Executive Summary
+In this summary, we hope to provide an accurate and non-technical description of our most important findings. Some of which we have already shown, as even in the preprocessing and initial visualzation stage, we were able to see some interesting patterns, such as the distribution of prices, ratings, and reviews, Which we found interesting and elaborated upon earlier. The following graphs are meant to shed some light on the "big picture" of our dataset while our main analysis goes into detail to examine both the aggregate and temporal aspects of Amazon.
+
+We begin the summary with a visualization, highlighting the growth of amazon in terms of reviews on a year over year basis. We've also plotted the stock price so we can compare the two metrics of "growth". We note that for 2014 there is only 6 months, so that explains the "drop".
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+reviews_by_year <- readRDS("reviews_by_year.rds")
+
+ggplot(data=reviews_by_year,aes(x=year, y=count/10^6)) + 
+  geom_line(color=theme_color, alpha=0.9) + 
+  xlab("Year") +
+  ylab("No of Reviews in millions") +
+  ggtitle("Number of Amazon Reviews by Year") +
+  scale_x_discrete(limits=1996:2014,
+                   labels=1996:2014)
+
+amz_stk <- read_csv('amz_stk.csv')
+amz_stk <- as.data.frame(amz_stk)
+names(amz_stk) <- c('Date','Close')
+amz_stk$Date <- as.Date.character(amz_stk$Date)
+
+ggplot(data=amz_stk,aes(x=Date,y=Close)) + geom_line(color=theme_color) + ggtitle("Amazon Stock  Price")
+
+```
+
+
+As we can see they have similar increasing trends, with the reviews being much smoother of course. So we can see that amazon is growing both from a fundamental standpoint in terms of items sold and from a market standpoint in terms of stock price.
+
+Let's take a look at a more aggregate view. Here is the average rating by Product Category.
+
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+avg_rating_by_cat <- readRDS("avg_rating_by_cat.rds")
+ggplot(data=avg_rating_by_cat,aes(x=Category, y=avg_rating)) + 
+  geom_col(fill=theme_color, alpha=0.9) + 
+  geom_text(aes(label=sprintf("%0.2f", avg_rating)), color="black", hjust=1.25, family="Arial Bold") +
+  coord_flip() +
+  xlab("Amazon Product Category") +
+  ylab("Average Rating") +
+  ggtitle(" Average Rating by Category by Amazon Reviewers")
+
+```
+
+As you can see the average ratings tend to skew to the higher side. This is an interesting finding as we can begin to ask questions beyond EDA such as if we can predict ratings, or more causal questions like why are ratings skewed in such a way. Also, the rating for books is highest and cell phones and accessories is the lowest. But overall, the ratings for different categories are in a narrow range. More importantly, the fact that the ratings are all in a narrow and high range shows that Amazon has been a reliable retailer that people refer to.
+
+
+These are just some key visualizations, which in conjunction with the plots found in part 3 form a good foundation for further exploration.
+
+
+### 5. Main Analysis
+
+Our main analysis focuses on the temporal and aggregate properties of the Amazon dataset. We begin with the Average Price by Category
+
+#### 5.1 Average Price by Category
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+avg_price_by_cat <- readRDS("avg_price_by_cat.rds")
+
+ggplot(data=avg_price_by_cat,aes(x=Category, y=avg_price)) + 
+  geom_col(fill=theme_color, alpha=0.9) + 
+  geom_text(aes(label=sprintf("$%0.2f", avg_price)), color="black", hjust=1.25, family="Arial Bold") +
+  coord_flip() +
+  xlab("Amazon Product Category") +
+  ylab("Average Price") +
+  ggtitle(" Average Price by Category")
+
+
+```
+
+This visualization reaffirms some intuitions you might have about the dataset. On average, automotive parts are probably going to be more expensive than books. But where we can draw insights is from the not so obvious relationships. Such as Baby products being more expensive than beauty products (in expectation). And tools being the same cost as modern electronics. Another interesting fact is that books and cell-phones and accessories are the lowest although they had the best and worst ratings, respectively from the average rating plot.
+
+
+#### 5.2 Monthly Trend in Reviews (across Years)
+
+We now examine a temporal trend. How do the number of reviews change throughout the year? As we can see, in the summer the number of reviews drops substantially. This is an interesting find, and raises many questions. The obvious being why? And the not so obvious being is there something Amazon can do to prepare for lower demand?
+
+December, March and January are the highest, August and September are the lowest. December and January are holiday seasons, March is the beginning of spring, and August and September are surprisingly low, although we expect to have back to school purchases.
+
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+reviews_by_month <- readRDS("reviews_by_month.rds")
+
+ggplot(data=reviews_by_month,aes(x=month, y=count)) + 
+  geom_line(color=theme_color, alpha=0.9) + 
+  xlab("Month") +
+  ylab("No of Reviews") +
+  ggtitle("Number of Amazon Reviews by Month") +
+  scale_x_discrete(limits=c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
+                   labels=c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
+
+
+```
+
+#### 5.3 Average Ratings by Month (across Years)
+
+The average review per month shows that people are generally happier about their purchases in January and February. One possible reason is the beginning of new year when people buy gifts and also refresh and maybe renovate their furniture and belongings. Also, some people buy books around new year time frame for read over the holidays.
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+avg_ratings_by_month <- readRDS("avg_ratings_by_month.rds")
+
+ggplot(data=avg_ratings_by_month,aes(x=month, y=avg_rating)) + 
+  geom_line(color=theme_color, alpha=0.9) + 
+  xlab("Month") +
+  ylab("Avg Rating") +
+  ylim(c(4.1,4.2)) +
+  ggtitle("Average Rating of Amazon Reviews by Month") +
+  scale_x_discrete(limits=c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"),
+                   labels=c("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"))
+
+```
+
+#### 5.4 Average Ratings by Year
+
+We are also interested in finding out if there is an correlation between the "average rating" of the reviews in dataset to the country's mood as indicated by Consumer Sentiment Index (University of Michigan). The gray periods indicate recessionary periods in US. The top chart shows the swing in ratings and the bottom chart indicates the sentiment index. 
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+avg_ratings_by_year <- readRDS("avg_ratings_by_year.rds")
+
+ggplot(data=avg_ratings_by_year,aes(x=year, y=avg_rating)) + 
+  geom_line(color=theme_color, alpha=0.9) + 
+  geom_vline(xintercept = 2001,col='gray') +
+  geom_vline(xintercept = 2002, col='gray') +
+  geom_vline(xintercept = 2008, col='gray') +
+  geom_vline(xintercept = 2010, col='gray') +
+  xlab("Month") +
+  ylab("Avg Rating") +
+  ggtitle("Average Rating of Amazon Reviews by Year") +
+  scale_x_discrete(limits=1996:2014,
+                   labels=1996:2014)
+  
+
+```
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+consumer_sentiment <- read.csv("Consumer_Sentiment_Michigan.csv")
+# Downloaded from https://fred.stlouisfed.org/series/UMCSENT/
+ggplot(data=consumer_sentiment, aes(x=DATE, y=UMCSENT)) +
+  geom_line(color="red", alpha=0.9) +
+  geom_vline(xintercept = 2001,col='gray') +
+  geom_vline(xintercept = 2002, col='gray') +
+  geom_vline(xintercept = 2008, col='gray') +
+  geom_vline(xintercept = 2010, col='gray') +
+    xlab("Year") +
+  ylab("Consumeer Sentiment") +
+  ggtitle("Consumer US Sentiment Index (1966 Indexed)") +
+  scale_x_discrete(limits=1996:2014,
+                   labels=1996:2014)
+```
+
+#### 5.5 Average rating of item with extreme price
+
+Here is a finding we thought would be interesting to investigate. Is there a sort of buyer's remorse for highly priced items? I.e. are consumers who purchased highly priced items more critical in their ratings? Here we consider items whose prices are greater than $500
+Before viewing, we suggest you go back and look at the average_rating per category graph found in the executive summary. And think about what you expect the answer to be.
+
+```{r echo =FALSE,warning=FALSE,message=FALSE}
+avg_rating_highly_priced <- readRDS('highly_priced.rds')
+ggplot(data=avg_rating_highly_priced,aes(x=Category, y=avg_rating)) + 
+  geom_col(fill=theme_color, alpha=0.9) + 
+  geom_text(aes(label=sprintf("%0.2f", avg_rating)), color="black", hjust=1.25, family="Arial Bold") +
+  coord_flip() +
+  xlab("Amazon Product Category") +
+  ylab("Average Rating") +
+  ggtitle(" Average Rating for Items more than $500")
+
+```
+
+As we can see the idea of "Buyer's Remorse" doesn't seem to be present in the data. As the average rating is just about equal to the average rating for all products
+
+#### 5.6 Weekly Trend in Reviews (across days of week)
+
+In this part, we study the customer review patterns on different days of the week. We start by investigating on which days of the week the customers write more reviews. Based on the data, people write most reviews on Mondays and Tuesdays and least over the weekend. In other words, people spend less time on writing reviews over the weekend, and on Monday and Tuesday, the first days of the week to start the work, they write most reviews.
+
+```{r echo =FALSE,warning=FALSE,message=FALSE}
+reviews_by_dayofweek <- readRDS('reviews_by_dayofweek')
+ggplot(data=reviews_by_dayofweek,aes(x=day, y=count/1e6, group=1)) + 
+  geom_col(fill=theme_color, alpha=0.9) + 
+  xlab("Day of Week") +
+  ylab("Million of Reviews") +
+  ggtitle("Number of Amazon Reviews by Day") +
+  scale_x_discrete(limits=c("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"),
+                   labels=c("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+
+```
+
+We then look into the average ratings of the customers on different days of the week. The plot below shows that the average rating is not sensitive to the day of week.
+
+```{r echo =FALSE,warning=FALSE,message=FALSE}
+avg_ratings_by_dayofweek <-readRDS('avg_ratings_by_dayofweek')
+ggplot(data=avg_ratings_by_dayofweek,aes(x=day, y=avg_rating, group=1)) + 
+  geom_line(color=theme_color, alpha=0.9) + 
+  xlab("Day of Week") +
+  ylab("Avg Rating") +
+  ggtitle("Average Rating of Amazon Reviews by Day") +
+  scale_x_discrete(limits=c("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"),
+                   labels=c("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+
+```
+
+We also look into the average price of items reviewed on different days. Again, the graph shows that average price of the items purchased does not depend on the day pf week.
+
+```{r echo =FALSE,warning=FALSE,message=FALSE}
+avg_price_by_dayofweek <- readRDS('avg_price_by_dayofweek')
+ggplot(data=avg_price_by_dayofweek,aes(x=day, y=avg_price, group=1)) + 
+  geom_line(color=theme_color, alpha=0.9) + 
+  xlab("Day of Week") +
+  ylab("Avg Price") +
+  ggtitle("Average Price of Amazon Products by Day") +
+  scale_x_discrete(limits=c("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"),
+                   labels=c("Saturday", "Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday"))
+
+```
+
+#### 5.7 Investigating most and least popular items
+
+In this section, we study the most and the least popular items. First, we look into all the items with 5 star rating and group them by the product title. Then we rank them by sorting them based on the count. Based on the table below, the most popular item was a book called "The Hunger Games (The Hunger Games, Book 1)" with more than 16,000 5-star reviews. Among the top 10 most popular items, 4 belong to books category, 5 belong to electronics, and one belongs to cell phones and accessories category.Two of Hunger Games books are among the top 10.
+
+The top 10 least popular items are also listed in the second table below. Four of them belong to books, 4 to cell phones and accessories, one to electronics, and one to home and tools improvement. More than 5700 people have disliked the book "Filthy Shadows of Grey".
+
+```{r echo =FALSE,warning=FALSE,message=FALSE}
+sorted_prod_by_rating_5star <- readRDS('sorted_prod_by_rating_5star')
+kable(sorted_prod_by_rating_5star[1:10,], caption = "Top 10 reviewers")
+```
+
+```{r echo =FALSE,warning=FALSE,message=FALSE}
+sorted_prod_by_rating_1star <- readRDS('sorted_prod_by_rating_1star')
+kable(sorted_prod_by_rating_1star[1:10,], caption = "Top 10 reviewers")
+
+
+```
+
+#### 5.8 Number of Reviews per Category
+
+
+Another interesting pattern is that the number of reviewers for books dominates the number of reviewers in other categories, as shown in the graph below. The ones who read more are the ones who write more. Baby products are reviewed the least. Perhaps families with babies are too busy to write reviews.
+
+```{r echo=FALSE,warning=FALSE,message=FALSE}
+avg_rating_by_cat <- readRDS("avg_rating_by_cat.rds")
+ggplot(data=avg_rating_by_cat,aes(x=Category, y=count/1e6)) + 
+  geom_col(fill=theme_color, alpha=0.9) + 
+  geom_text(aes(label=sprintf("%0.2f", avg_rating)), color="black", hjust=1.25, family="Arial Bold") +
+  coord_flip() +
+  xlab("Amazon Product Category") +
+  ylab("Millions of Reviews") +
+  ggtitle(" Number of Reviews by Category by Amazon Reviewers")
+```
+
+
+### 6. Conclusion
+
+In this work, we visualized a big data set containing information about Amazon products from 1996 to 2014. We overcame the challenge of visualizing big datasets and provided insights and drew interesting and constructive patterns. Several interesting observations are as follows:
+- the average product rating is concentrated around 5 star which shows that Amazon performs as a healthy and trustworthy retailer in the given period. And reveals a quirk (skewness) about consumer behavior
+- The average ratings exhibited a narrow range with  books being the highest and cell phone and accesories being the lowest. 
+- The reviews are highest in December and January which is holiday season (Black Friday and Christmas) and drops significantly during the Summer months. 
+- Books received the highest number of reviews and baby products the least. 
+- Also, people write reviews much more on Mondays and Tuesdays compared to the weekends, despite our intuition otherwise.
+
+The challenge in this project was not only the size of data or the preprocessing involved. But also being able to draw interesting conclusions and find insight from the graphs we created. Finally, often times our intuition would have us think of an answer before we examined the data, only to find the data itself tells another story. 
+
+### 7. Extras
+We developed a shiny app, which can be found here. It may take some time to load, and if you're viewing this in Rstudio you'll have to view it in browser. But it is a fun exploratory tool for finding books, ratings, and titles. It's a scatterplot with a tooltip that allows for filtering. You can hover over points in the scatter plot to find the title, average rating, and average price of that particular book
+
+<iframe src="https://mdiamore.shinyapps.io/edav-project2/" style="border: none; width: 1200px; height: 900px"></iframe>
+
+[Our Shiny App](https://mdiamore.shinyapps.io/edav-project2/)

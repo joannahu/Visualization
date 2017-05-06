@@ -1,0 +1,256 @@
+---
+title: Analyzing 45 Million Amazon.com user ratings
+output:
+  prettydoc::html_pretty:
+  theme: cayman
+  highlight: github
+---
+
+
+**By: Michael Di Amore (mad2271), Aravind Sadagopan (as5195), Amir Rahmani (ar3717)**
+
+### 1. Introduction
+
+The motivation behind the project is to primarily explore and visualize big-data sets. The idea is to tackle the inherent challenges in terms of data-processing, feature extraction, out-of-core data aggregation to explore and visualize patterns in huge datasets. Our analysis pertains to a subset of publicly available amazon data found here at http://jmcauley.ucsd.edu/data/amazon/ . The team spoke to the author Julian Macualey who provided us links to full dataset and the metadata table which contains the product and pricing info for research purposes (citation for use of data provided below ) The original data consists of 142.8 million reviews and 83.8 million ratings across 24 categories spanning May 1996 - July 2014 from Amazon.com website and a separate metadata which contains 5.2 million product metadata
+
+The Amazon review data set is a semi-structured multi-table json file of reviews and ratings of various amazon products across multiple categories. For the purpose of this project we leveraged Amazon EC2 to preprocess the entire dataset (python script used for preprocessing data included) to restrict our focus to following categories.
+
+- Books
+- Electronics
+- Cellphone and Accessories
+- Automotive
+- Baby
+- Beauty
+- Tools and Home Improvement 
+- Clothing, Shoes & Jewelry
+
+
+The final dataset for this project has 45.7 million reviews (across 8 product categories) cross-referenced with the 5.2 million product metadata. This also reduced the dataset size from 18 GB to 5 GB.
+
+Our intention beyond the obvious data engineering and feature extraction challenges is to answer few motivating questions like:-
+1. Does average product rating converge to 3 stars or is it concentrated at extremes as only excited or unhappy customers take time to review?
+2. Do ratings and product categories have some correlation? For example, do Baby products have extreme ratings compared other categories as they tend to have higher expectations/concerns towards products?
+3. Do reviewer activity correlate with festival shopping activity (Black Friday, Christmas etc.) or is there a lag effect?
+4. What is the average price of a product that gets extreme reviews? Does the price of product have an effect on the sentiment of the customer?
+
+##### _Citation_
+_Image-based recommendations on styles and substitutes J. McAuley, C. Targett, J. Shi, A. van den Hengel
+SIGIR, 2015_
+
+_Inferring networks of substitutable and complementary products J. McAuley, R. Pandey, J. Leskovec
+Knowledge Discovery and Data Mining, 2015)_
+
+### 2. Team
+
+- Michael Di Amore (mad2271)
+- Aravind Sadagopan (as5195)
+- Amir Rahmani (ar3717)
+
+The nature of the project required us to be highly collaborative. Beyond the preprocessing of raw data, the team did collaborate on every aspect on the project including the final report. The team members often analyzed the data independently and we met once a week to share our findings/analysis and to decide on which aspects of our analysis we wanted to include/further analyze. 
+
+### 3. Analysis of Data Quality
+
+#### 3.1 Raw Data to Project Dataset
+
+The following workflow illustrates the conversion pieline from raw data to the final dataset used for this project
+
+
+![Data Preprocessing pipeline](data_preprocessing.png)
+
+
+__Python Preprocessing code__
+
+```
+import os
+import glob
+
+import pandas as pd
+import gzip
+
+def parse(path):
+    g = gzip.open(path, 'rb')
+    for l in g:
+        yield eval(l)
+
+def getDF(path):
+    i = 0
+    df = {}
+    for d in parse(path):
+        df[i] = d
+        i += 1
+    return pd.DataFrame.from_dict(df, orient='index')
+
+# Read Metadata JSON file to metadata csv
+with open('metadata.csv','w') as meta:
+    meta_writer = csv.writer(meta)
+    meta_writer.writerow(['asin', 'title', 'price'])
+    for review in parse("metadata.json.gz"):
+        if 'asin' in review:
+            asin = review['asin']
+        else:
+            continue
+        if 'title' in review:
+            title = review['title']
+        else:
+            title = 'NA'
+        if 'price' in review:
+            price = review['price']
+        else:
+            price = 'NA'
+        meta_writer.writerow([asin, title, price])
+
+metdata = pd.read_csv('metadata.csv')
+cat_files = glob.glob("./reviewdata/ratings*.csv")
+for filename in cat_files:
+    cat_data = pd.read_csv(filename, header=None, 
+                        names=['uid','asin','rating','timestamp'])
+    cat_out = cat_data.merge(metdata)
+    category_name = os.path.basename(filename)
+    cat_out.to_csv('output/' + category_name,index=False)
+
+want_header = True
+out_filename = "./output/amazon_ratings_full.csv"
+
+if os.path.exists(out_filename):
+    os.remove(out_filename)
+
+read_files = glob.glob("./output/*.csv")
+
+with open(out_filename, "w") as outfile:
+    for filename in read_files:
+        category = os.path.basename(filename).split('.')[0]
+        with open(filename) as infile:
+            if want_header:
+                outfile.write('{},Category\n'.format(next(infile).strip()))
+                want_header = False
+            else:
+                next(infile)
+            for line in infile:
+                outfile.write('{},{}\n'.format(line.strip(), category))
+
+```
+
+#### 3.2 Data Schema
+
+The final schema for the merged data for ratings is illustrated below
+```{r echo=FALSE}
+library(knitr)
+schema <- read.csv('schema.csv')
+kable(schema)
+```
+
+#### 3.3 Total Rows & Missing Values in Data
+
+The dataset has 45.7 million ratings and has complete values for all fields except for the price and title  of certain products highlighted below
+```{r include=FALSE, echo=FALSE, warning=FALSE, error=FALSE, results='hide'}
+library(readr)
+library(dplyr)
+library(ggplot2)
+library(ggthemes)
+library(lubridate)
+setwd("/Users/aravinds/Dropbox/MIDS/Spring 2017/Explratory Data Analysis/Project/")
+#full_data <- read_csv('output/amazon_ratings_full.csv')
+
+#full_data$date <- dt<-as.POSIXct(full_data$timestamp,origin="1970-01-01",tz="GMT")
+```
+```{r echo=FALSE}
+total_rows <- readRDS('total_rows.rds')
+kable(t(total_rows), caption = "Summary of Ratings ")
+```
+
+```{r echo=FALSE}
+missing_values <- readRDS('missing_values.rds')
+kable(t(missing_values), caption = "Missing Value Summary")
+```
+
+#### 3.4 Data Summary
+
+##### 3.4.1 Distibution of Ratings
+From the datatset, 4 and 5 star reviews dominate compred to 1 and 2 star ratings
+```{r echo=FALSE}
+count_by_ratings <- readRDS('count_by_rating.rds')
+
+ggplot(data=count_by_ratings,aes(x=rating, y=count)) + 
+  geom_col(fill="#339900", alpha=0.9) + 
+  xlab("Amazon Reviewer Rating") +
+  ylab("Count") +
+  ggtitle("Distribution of Ratings")
+```
+
+##### 3.4.2 Distibution of Categories
+
+Books dominate the ratings in this dataset followed by Electronics. Baby products have the fewest ratings
+```{r echo=FALSE}
+count_by_categories <- readRDS('count_by_categories.rds')
+count_by_categories <- count_by_categories %>% arrange(desc(count))
+count_by_categories$Category <- factor(count_by_categories$Category, levels=rev(count_by_categories$Category))
+ggplot(data=count_by_categories,aes(x=Category, y=count)) + 
+  geom_col(fill="#339900", alpha=0.9) + 
+  xlab("Amazon Product Category") +
+  ylab("Count") +
+  ggtitle("Distribution of Categories") +
+  coord_flip()
+
+```
+
+##### 3.4.3 Distibution of Prices
+The distribution of product prices is heavily skewed. 1.6 million products do not have price values and for the non-nll values, the median price is $13.92, mean is $33.99 with max value of $1000. The products have a long tail in terms of prices
+
+```{r echo=FALSE, warning=FALSE, error=FALSE}
+prices <- readRDS('price_data.rds')
+prices = as.data.frame(prices)
+summary_prices <- summary(prices$prices)
+kable(t(summary_prices))
+
+```
+
+```{r echo=FALSE, warning=FALSE}
+ggplot(data=prices, aes(x=prices)) + geom_density(color="#339900", alpha=0.9) +
+  xlab("Price of Item") +
+  ylab("Density") +
+  ggtitle(" Density Plot of Prices of Products")
+```
+
+
+##### 3.4.4 Distibution of per user Ratings
+
+The below chart shows that 55% of the entire reviwer base in data set provides only 1 review rating, 73% of the reviewer base provides less than 2 reviews and 90% of the base provides less than 5 reviews. However there are active reviewers with one reviewer providing __43,202 reviews__
+and top 10 reviewers with more than 4000 reviews each.
+
+```{r echo=FALSE}
+review_count <- readRDS("review_counts.rds")
+cum_reviews <- review_count %>% mutate(normalize = total/sum(total), proportion = cumsum(normalize)) %>% filter((reviews <= 75))
+ggplot(cum_reviews, aes(x=reviews, y=proportion)) +
+  geom_line(color="#339900") +
+  xlab("No of Ratings per User") +
+  ylab("Cumulative Proportion") +
+  ggtitle(" Cumulative Distribution of Number of Ratings per user")
+
+```
+
+```{r echo=FALSE}
+reviews_by_user <- readRDS('reviews_by_user_top10.rds')
+
+kable(reviews_by_user, caption = "Top 10 reviewers")
+```
+### 4. Executive Summary
+
+
+### 5. Main Analysis
+
+#### 5.1 Average Rating by Product Category
+```{r}
+avg_rating_by_cat <- readRDS("avg_rating_by_cat.rds")
+ggplot(data=avg_rating_by_cat,aes(x=Category, y=avg_rating)) + 
+  geom_col(fill="#339900", alpha=0.9) + 
+  geom_text(aes(label=sprintf("%0.2f", avg_rating)), color="black", hjust=1.25, family="Arial Bold") +
+  coord_flip() +
+  xlab("Amazon Product Category") +
+  ylab("Average Rating") +
+  ggtitle(" Average Rating by Category by Amazon Reviewers")
+
+```
+
+
+### 6. Conclusion
+

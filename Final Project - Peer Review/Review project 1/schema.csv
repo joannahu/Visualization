@@ -1,0 +1,1 @@
+﻿No.,Field Name,Description1,uid,UserID of Reviewer2,asin,Product ID3,ratings,Ratings (1 to 5)4,timestamp,Unix timestamp of review5,title,Product Name6,price,Product price7,category,Product category (one of 8 outlined above)
