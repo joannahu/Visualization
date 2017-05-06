@@ -1,0 +1,179 @@
+---
+title: "EDA Homework1"
+output:
+  html_notebook: 
+    number_sections: True
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+---
+
+#Q1
+Find one graph that you like and one that you don't online or in print and write one paragraph for each, describing what you think is effective or not effective.  
+Graph I like:  <http://blogs.discovermagazine.com/neuroskeptic/files/2013/09/autism_research_2.png>  
+It uses different colors and shapes to distinguish three sets of data: autism, ADHD and Down??s so that readers can have a clear view about the dataset.  
+Graph I don't like: <http://blogs.discovermagazine.com/neuroskeptic/files/2012/03/obesefood.jpg>  
+It seems like overdo with the colors. We can just use two colors to compare Pubmed and Google. Too colorful illustration may make readers confused.  
+  
+#Q2 
+##Ex1: Galaxies   
+The dataset galaxies in the package MASS MASS contains the velocities of 82 planets.  
+(a) Draw a histogram, a boxplot, and a density estimate of the data. What information can you get from each plot?  
+1. histogram  
+```{r}
+library(MASS)
+hist(galaxies)
+```
+Information: most galaxies' velocity is between 20000 and 25000.  
+2. box plot  
+```{r}
+library(MASS)
+boxplot(galaxies)
+```
+Information: Half of the galaxies' velocity is between 1800 and 2400. The median velocity is about 2000. 3 upper outliers with velocity larger than 2700 and many lower outliers below 1500.  
+3. density estimation
+```{r}
+library(MASS)
+plot(density(galaxies))
+```
+Information: most galaxies' velocity is between 20000 and 25000. And the density/probability is about (10e-0.5)*5000  
+  
+(b) Experiment with different binwidths for the histogram and different bandwidths for the density estimates. Which choices do you think are best for conveying
+the information in the data?  
+```{r}
+library(MASS)
+hist(galaxies, breaks=6)
+```
+I think breaks=6 is best because breaks more than 6 will let some break have NULL frequency and breaks less than 6 expresses less information than = 6.  
+```{r}
+library(MASS)
+plot(density(galaxies,bw=1000))
+```
+I use bandwith = 1000, because if too small, there will be too much ups and downs between breaks(x-span=5000). While if too large, some information may be lost.  
+  
+##Ex3 Student survey  
+The data come from an old survey of 237 students taking their frst statistics course. The dataset is called survey in the package MASS  
+(a) Draw a histogram of student heights and overlay a density estimate of the data. Is there evidence of bimodality?  
+use basic method:  
+```{r}
+library(MASS)
+plot(density(survey$Height,na.rm=TRUE))
+hist(survey$Height,freq=FALSE,add=TRUE)
+```
+
+use ggplot:  
+```{r}
+library(MASS)
+library(ggplot2)
+ggplot(survey, aes(x = survey$Height)) + geom_histogram(aes(y=..density..), bins=15,colour="black", fill="white") + geom_density(alpha=.2, color="red", fill="#FF6666") 
+```
+
+Yes, there's evidence of bimodality with tops at 168 and 180  
+(b) Experiment with different binwidths for the histogram and different bandwidths for the density estimates. Which choices do you think are best for conveying
+the information in the data?  
+```{r}
+library(MASS)
+ggplot(survey, aes(x = survey$Height)) + geom_histogram(aes(y=..density..), bins=15,colour="black", fill="white") + geom_density(bw=2.5, alpha=.2, color="red", fill="#FF6666") 
+```
+I prefer bin width 15 and Bandwidth  2.5.  
+
+(c) Compare male and female heights using separate density estimates that are common scaled and aligned with one another.  
+```{r}
+library(MASS)
+ggplot(survey, aes(x = survey$Height)) + geom_histogram(aes(y=..density..), bins=15,colour="black", fill="white") + geom_density(bw=2.5, alpha=.2, color="red", fill="#FF6666") + facet_wrap(~survey$Sex,drop=TRUE,scales="free") 
+```
+
+##Ex5: Zuni educational funding  
+The zuni dataset in the package lawstat seems quite simple. There are three pieces of information about each of 89 school districts in the U.S. State of New Mexico:
+the name of the district, the average revenue per pupil in dollars, and the number of pupils. This apparent simplicity hides an interesting story. The data were used to determine how to allocate substantial amounts of money and there were intense legal disagreements about how the law should be interpreted and how the data should be used.  
+Gastwirth was heavily involved and has written informatively about the case from a statistical point of view, [Gastwirth, 2006] and [Gastwirth, 2008]. One statistical issue was the rule that before determining whether district revenues were suffciently equal, the largest and smallest 5% of the data should frst be deleted.  
+(a) Are the lowest and highest 5% of the revenue values extreme? Do you prefer a histogram or a boxplot for showing this?  
+To show extreme data, I prefer boxplot.  
+```{r}
+library(ggplot2)
+library(lawstat)
+data(zuni)
+ggplot(zuni,aes(x=factor("revenue"), y=zuni$Revenue))+geom_boxplot()
+```
+From the boxplot, we can see the lowest and highest 5% of the revenue values are extreme.  
+(b) Having removed the lowest and highest 5% of the cases, draw a density estimate of the remaining data and discuss whether the resulting distribution looks symmetric.  
+```{r}
+library(ggplot2)
+library(lawstat)
+data(zuni)
+interval=quantile(zuni$Revenue, c(0.05,0.95), na.rm = TRUE)
+zuni_removed <- zuni[zuni$Revenue >= interval[1] & zuni$Revenue <= interval[2], ]
+# zuni_removed <- zuni[zuni$Revenue >= quantile(zuni$Revenue, 0.05, na.rm = TRUE) & zuni$Revenue <= quantile(zuni$Revenue,0.95, na.rm = TRUE), ]
+ggplot(zuni_removed,aes(x=zuni_removed$Revenue))+geom_histogram(aes(y=..density..),bins=15,colour="black", fill="white")+geom_density(color="red")
+```
+Looks almost symmetric. 
+(c) Draw a Q-Q plot for the data after removal of the 5% at each end and comment on whether you would regard the remaining distribution as normal.  
+```{r}
+qqnorm(zuni_removed$Revenue, main="QQ plot", xlab="",ylab="", pch=16)
+qqline(zuni_removed$Revenue)
+
+```
+The circles in this Q-Q plot start out on one side of the line, then are almost exclusively on the other side for a long stretch, then move to the other side of the line again. This behavior indicates some degree of skewing (have a left tail). The fact that the circles start consistently above the line, then stay consistently below it, then rise above it indicates left skewing. 
+
+#Q3
+Submit your three best attempts to display the four characteristics (composition, drawing, colour, and expression) of the 54 classical painters included in the painters dataset (MASS package). Provide brief commentary indicating the strengths and weaknesses of each. At least one of your graphs should include all four characteristics, the other two may or may not. You may use base graphics or ggplot2.   
+```{r}
+library(MASS)
+x<-painters$School
+y<-painters$Composition
+z<-painters$Drawing
+u<-painters$Colour
+v<-painters$Expression
+
+boxplot(Composition~School, data=painters, main="Composition level of each school", xlab="School", yloab="Composition score")
+
+```
+Strength: have a clear illustration of the distribution of composition level of the eight school.    
+Weakness: lack visual beauty, can add color to the plot    
+
+```{r}
+library(reshape2)
+newdata = melt(painters,id=c("School"), vars=c("Composition","Drawing","Colour","Expression"))
+ggplot(newdata,aes(x=variable,y=value))+ geom_point()
+```
+Strength:  four characters (composition, drawing, colour, and expression) are used. 
+Weakness: I think boxplot is better than point graph to display the data. 
+
+```{r}
+calAverage <- function(painters, school){
+ subdata = subset(painters,School %in% c(school))
+ avg_composition = mean(subdata$Composition)
+ avg_drawing = mean(subdata$Drawing)
+ avg_color = mean(subdata$Colour)
+ avg_expression = mean(subdata$Expression)
+ return (c(avg_composition,avg_drawing,avg_color,avg_expression))
+}
+
+#calculate average
+A = calAverage(painters,"A")
+B = calAverage(painters,"B")
+C = calAverage(painters,"C")
+D = calAverage(painters,"D")
+E = calAverage(painters,"E")
+F = calAverage(painters,"F")
+G = calAverage(painters,"G")
+H = calAverage(painters,"H")
+
+#create dataframe
+newdata = data.frame(A,B,C,D,E,F,G,H)
+newdata = t(newdata)
+school = c("A","B","C","D","E","F","G","H") 
+newdata = cbind(school, newdata)
+colnames(newdata) = c("School","Composition", "Drawing", "Color", "Expression")
+newdata =data.frame(newdata)
+newdata = melt(newdata, id = c("School"))
+
+#plot
+colormap = c("blue","red","green", "orange")
+# plot
+ggplot(data = newdata, aes(x=School, y=value)) + geom_point(aes(colour=variable))
+```
+Strength: complex data cleaning is done
+Weakness: scientific notation can be employed on y tick label. 
+
