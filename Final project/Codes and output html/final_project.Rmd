@@ -1,0 +1,1511 @@
+---
+title: "Mobile App User Behavior Analysis"
+output:
+  html_document:
+    #code_folding: hide
+    number_sections: True
+    toc: yes
+    toc_float:
+      collapsed: no
+      smooth_scroll: no
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r, warning=FALSE, message=FALSE}
+#library
+library(ggplot2)
+library(vcdExtra)
+library(plyr)
+library(readxl)
+library(gridExtra)
+library(extracat)
+library(mi)
+library(ggmosaic)
+library(GGally)
+library(vcd)
+```
+
+
+
+
+
+# Introduction
+The topic of our project is to analyze user behavior on mobile phones. 
+
+In this information age, constantly growing web users let entrepreneurs pay more and more attention to online business and user behavior analytics emerges as a popular field of study. Companies make great efforts in developing techniques on user behavior analytics and with a close scrutiny of online user behavior pattern, they are likely to considerably maximize their profits.
+
+As the fast development of mobile phone, more and more powerful functions are integrated into it and inevitably, mobile phone gradually takes the place of laptop to become the most important media for people to access internet. As nowadays more online transactions are proceeded by mobile phones than by laptop, cell phones have become an ideal target for user behavior analysis.
+
+That’s why we choose this topic. We’re intended to carry out researches on the phone type, operation system type, app store type, frequency of installing/removing app, as well as the factors contributing to all these user behavior, such as age, education, salary, nationality and etc. 
+
+Our data comes from https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/27459
+
+Dataset can be downloaded once you access the above website. It surveyed 10,208 people from more than 15 countries on their mobile app usage behavior.
+
+** Sources Cited from **:
+ 
+Dataset:
+https://dataverse.harvard.edu/dataset.xhtml?persistentId=doi:10.7910/DVN/27459
+
+
+
+Relative Paper:
+http://www0.cs.ucl.ac.uk/staff/S.Lim/app_user_survey/tse_mobile_app_country_differences_lim_etal.pdf
+
+
+#Team
+TeamName: GoLions
+
+Minghong ZHENG (mz2597): clean data
+
+Qiong HU (qh2174): write document
+
+Then we work together to analyze and plot data. 
+
+#Analysis of Data Quality
+
+##Data Description
+
+The surveys were taken in 2012 online. All the survey samples are confirmed to be generated randomly to be considered as a representative sample. There are 30 questions in the survey data used for mobile app user behavior analysis. We will combine the mobile app user experience (e.g.mobile device) with demographic data (e.g. age and country) to analyze their user behavior.
+
+
+
+##Missing values
+
+As you can see below, we found there were lot of missing data across almost all the features. Replacing all of them with mode or media will mislead our results. Therefore, we decided to keep the missing values first and drop them when it is necessary. For example, when we need to analyze age and mobile device, we only need to drop the missing values in these two features rather than drop all the rows which contains any missing values in all the features, which causes to lose a lot of useful information.
+
+
+```{r,warning=FALSE, message=FALSE}
+
+#load the data
+data=read.csv( "/Users/zhang/Desktop/qiong hu/visualization/Final project/mobile_app_user_dataset_1.csv",
+header=TRUE,sep=",")
+
+#excluding unnecessary dataset
+myvars <- names(data) %in% c("ID", "StartDate", "EndDate","Response.Status","Participant.Type","Q1_2_TEXT","Q1_3_TEXT","Q1_4_TEXT","Q1_5_TEXT","Q1_6_TEXT","Q1_7_TEXT","Q12.1_1_TEXT","Q12.1_2_TEXT","Q12.1_3_TEXT","Q12.1_4_TEXT","Q12.2") 
+
+#drop the first row
+newdata <- data[!myvars][-1,]
+#repalce all empty cell as missing values
+newdata[newdata==""]=NA
+#drop unnecessary levels
+newdata=droplevels(newdata)
+
+#plot the missing values
+
+image(missing_data.frame(newdata),grayscale = FALSE)
+
+```
+
+##Data Misspelling
+Since the device type questions is a short answer rather than a multiple choice question, a lot of people made typos for their answers. For example, many people wrote Samsung as samaung ,samgung, Samgung and so on. Therefore, we need to clean those typos first before we do analysis.
+
+Below are some of answers for the questions "What mobile device do you use?"
+
+```{r,warning=FALSE, message=FALSE}
+levels(newdata$Q3_1_TEXT)[1:100]
+```
+##Data Structure
+The value of each answer in the dataset are represented as integer or numerical data. For example, the question is that "what is your gender?,  and the answer is "male (1), female (2)"  Then the data value for the answer will be 1 and 2 as shown below instead of male and female. In order to visualize the data, we need to assign this data as actual meaning values(i.e. male, female)manually.
+
+```{r,warning=FALSE, message=FALSE}
+unique(newdata$Q16)
+```
+
+##Demographic Data Distribution
+The #participators in each country and each age period are not the same. However, the numbers of female and male are very close. Therefore, in order to avoid being affected by age and country uneven distributions, when we analyze our mobile user behavior data in age or country groups, we will compare the percentage instead of counts of those behavior data among different countries or age groups. For example, when we compare the iphone distributions over different age groups, we will check the percentage of iphone users among different age groups (i.e. young, and middle age people) instead of # iphone users since there were more young people taking the survey. It seems like that in 2012, young people preferred to use Nokia and Samsung to iphone. Thus, there were much more Samsung and Nokia users than iPhone due to the large young participators in our survey, which is biased. 
+
+
+
+```{r, warning=FALSE, message=FALSE}
+#data cleaning on Age
+
+#convert age type from factor to numeric data
+newdata$Q17=as.numeric(as.character(newdata$Q17))
+
+#data cleaning on Country
+
+#assign the country name
+levels(newdata$Q19)=c("USA","Italian","Japan","Mexico","Russia","South Korea","Spain","Others","Australia","Brazil","UK","Canada","China","France","Germany","India")
+
+#data cleaning on Sex
+
+#assign the sex label
+levels(newdata$Q16)=c("Male","Female")
+
+
+#make barchart shown in order
+reorder_size <- function(x) {
+  factor(x, levels = names(sort(table(x),decreasing = TRUE)))
+}
+
+
+#histogram and barchart
+country_plot=ggplot(newdata[!is.na(newdata$Q19),],aes(reorder_size(Q19))) +geom_bar(fill="lightblue")+xlab("Country")+coord_flip()
+
+Age_plot=ggplot(newdata[!is.na(newdata$Q17),],aes(Q17)) + geom_histogram(col="red",
+                 fill="lightgreen",alpha = .2)+xlab("Age")
+
+Sex_plot=ggplot(newdata[!is.na(newdata$Q16),],aes(fill=Q16,reorder_size(Q16))) +geom_bar()+xlab("")+labs(fill="Gender") 
+
+
+grid.arrange(Sex_plot,country_plot, Age_plot, ncol=2)
+
+
+```
+
+#Executive Summary
+
+We combined the demographic data with user experience from survey answers to explore people mobile app user behaviors in different ages, countries, and incomes. 
+
+
+**Age Groups**:
+  
+We compared the mobile user behaviors in three age groups: teenagers (11-21), young adults (22-32), middle-aged adults (33-43).  The reason why we only focused on these three groups is that they are the most active app users based on average monthly app downloads. 
+
+The graph below shows that interesting app types distributions in different age and gender groups. It is surprising to see that over the top 5 popular app types (i.e. games, social networking, music, utilities, photos), female teenagers were the most active app user group. Comparing female and male behavior in each age groups, female teenagers were much more active than male teenagers on apps, but female and male in other two groups behaved very similar.  In addition, when we only compared female in different age group, female teenagers were much more active than female young adults and female middle-age adults.  
+
+Thus, companies can think about the methodology to target the female users since they are most active user groups from this graph
+
+
+
+
+![](/Users/zhang/Desktop/qiong hu/visualization/Final project/agesex.png)
+
+Below are other interesting things that we found. You can check the analysis process and graphs from the main analysis section
+
+- people usually prefer to use free apps especially  for teenagers.
+
+- Young people were more active than old people
+
+- Teenager preferred to use Samsung and Nokia since they are cheaper than iPhone.
+  
+- Younger people used the app for fun, but older people tended to use the app for study or work.
+
+
+
+
+**Country**:
+
+We research on the user behavior of choosing mobile apps based on different countries. We choose three representative nations from three continents, namely USA, China, France, respectively from America, Asia and Europe. 
+
+Let's take a look at the app type distributions in the bar chart.  
+
+- Entertainment apps such as "Social networking" and "Games" get lots of votes, especially in USA and France 
+
+- "Food & drink" is particularly popular in China, which aligns with the famous and various Chinese culinary skills.  
+
+- "Books" has a comparably high proportion in China, while France is to the contrary. It fits right the preference of paper books among French people.  
+
+- "Business" users are concentrated in China, but "Sports" is welcome in USA and France. We may draw the conclusion that most USA and French users use mobile apps for fun, which also implies that apps for study and work are in low-developing status and left for future developers to make efforts.
+
+
+![](/Users/zhang/Desktop/qiong hu/visualization/Final project/country.png)
+
+
+**Income**:
+
+We explore the relation between annual income and app type. From following interactive graph, 
+
+- Entertainment apps like "Games" and "Social networking" are the only two catalogues of which usage is inversely proportional.
+
+- App types except entertainment apps all are more popular as the income increases.
+
+
+![](/Users/zhang/Desktop/qiong hu/visualization/Final project/income.png)
+
+
+#Main Analysis
+
+##Data Cleaning
+###Clean Country Feature
+treat invalid context  as NA
+```{r, warning=FALSE, message=FALSE}
+country=newdata$Q19
+country[country==""]=NA
+levels(country)[2:17]=c("USA","Italy","Japan","Mexico","Russia","South Korea","Spain","Others","Australia","Brazil","UK","Canada","China","France","Germany","India")
+newdata$Q19=country
+```
+
+###Clean Device Feature
+Since it is a survey data, a lot of people made typos for their answers. For example, many people wrote Samsung as samaung ,samgung, Samgung and so on. Therefore, we need to clean those typos.
+
+```{r, warning=FALSE, message=FALSE}
+#create a table only with Q3_1_TEXT column
+col=newdata$Q3_1_TEXT
+#replace the missing values with NA
+#replace the invalid words as Samsung
+levels(col)[c(22,401,405:464,486:490,551:555,175:177,404)]="Samsung"
+
+#replace the invalid words as iphone
+levels(col)[c(21,49:70,209:214,220:235)]="apple"#include iphone and ipad
+
+#replace the invalid words as Nokia
+levels(col)[c(275,277:286,289:298)]="nokia"
+
+#replace the invalid words as LG
+levels(col)[c(216:217,221:232)]="LG"
+
+#replace the invalid words as HTC
+levels(col)[c(162,164,170:175,177:179)]="HTC"
+
+#replace the invalid words as Blackberry
+levels(col)[c(65:66,71:93)]="Blackberry"
+
+#replace the invalid words as Sony
+levels(col)[c(315:325,329:364,107,108)]="Sony"
+
+#replace the invalid words as Motorola
+levels(col)[c(26,196:212)]="Motorola"
+
+#replace the invalid words as Huawei
+levels(col)[c(145:149)]="Huawei"
+
+#replace the invalid words as NA
+levels(col)[c(1:20,23:24,27:37,146:147,154:156)]=NA 
+
+#set else as others
+levels(col)[c(-1,-2,-4,-32,-74,-104,-139,-168)]='others'
+
+#copy the col back to newdata
+newdata$Q3_1_TEXT=col
+
+percent=nrow(subset(newdata,Q3_1_TEXT %in% c("Samsung","apple","nokia")))/nrow(newdata[!is.na(newdata$Q3_1_TEXT),])
+```
+
+
+###Clean Download Feature
+
+As we metioned in the data structure in analysis of data quality, they are labeled by numbers rather than download times, so we need to assign this data as actual meaning vlaues manually.
+```{r,warning=FALSE, message=FALSE}
+levels(newdata$Q6)=c("0-1","2-5","6-10","11-20","21-30","more than 30")
+
+```
+
+
+###Clean Appstore Feature
+
+As we metioned in the data structure in analysis of data quality,they are labeled by numbers rather than appstore values, so we need to assign this data as actual meaning vlaues manually.
+
+```{r}
+appstore=newdata$Q4
+
+levels(appstore)=c("Apple","Don't Use","Blackberry","Google Play/Android","Nokia","Samsung","Windows Phone","cannot run apps","don't know","others")
+newdata$Q4=appstore
+
+```
+
+
+###Clean income Feature
+
+As we metioned in the data structure in analysis of data quality,they are labeld by numbers rather than income values, so we need to assign this data as actual meaning vlaues manually.
+
+```{r, warning=FALSE, message=FALSE}
+#integrate Q29.1 - 29.13 and save in Q29.1
+income=subset(newdata, select=c("Q29.1","Q29.2","Q29.3","Q29.4","Q29.5","Q29.6","Q29.7","Q29.8","Q29.9","Q29.10","Q29.11","Q29.12","Q29.13"))
+
+income$Q29.1 = as.integer(as.character(income$Q29.1))
+#income$Q29.1[is.na(income$Q29.1)] = 0
+income$Q29.2 = as.integer(as.character(income$Q29.2))
+income$Q29.3 = as.integer(as.character(income$Q29.3))
+income$Q29.4 = as.integer(as.character(income$Q29.4))
+income$Q29.5 = as.integer(as.character(income$Q29.5))
+income$Q29.6 = as.integer(as.character(income$Q29.6))
+income$Q29.7 = as.integer(as.character(income$Q29.7))
+income$Q29.8 = as.integer(as.character(income$Q29.8))
+income$Q29.9 = as.integer(as.character(income$Q29.9))
+income$Q29.10 = as.integer(as.character(income$Q29.10))
+income$Q29.11 = as.integer(as.character(income$Q29.11))
+income$Q29.12 = as.integer(as.character(income$Q29.12))
+income$Q29.13 = as.integer(as.character(income$Q29.13))
+
+result=floor(rowMeans(income, na.rm=TRUE))
+result[is.na(result)] = NA
+result = factor(result)
+levels(result)[1:12]=c("0-10,000","10,001-20,000","20,001-30,000","30,001-50,000","50,001-70,000","70,001-100,000","100,001-150,000","150,001-200,000","200,001-250,000","250,001-350,000", ">350,000", "Prefer not to say")
+newdata$Q29.1 = result
+
+
+#convert categorical to numerical data
+newdata1 = subset(newdata,select=c("Q29.1"))
+
+newdata1$Q29.1[newdata1$Q29.1 == "Prefer not to say"] = NA
+levels(newdata1$Q29.1)[levels(newdata1$Q29.1)=="Prefer not to say"] = NA
+levels(newdata1$Q29.1) = c("5000","15000","25000","40000","60000","85000","125000","175000","225000","300000","400000"  )
+newdata1$Q29.1 = as.integer(as.character(newdata1$Q29.1))
+
+newdata$Q29.2 = newdata1$Q29.1
+
+```
+
+
+
+
+##Age analysis
+
+### One Variable Analysis
+
+The graph below is comparing downloads distributions over different ages. 
+From this graph, I found that most active app users are around 13 to 40 years old.
+
+However, this graph cannot tell the finding directly. Also, the age distribution for this survey is right skewed, which indicates that the numbers of participators in different ages are not the same. That makes senses since young people are more likely to take online survey than old people.
+
+Therefore, it is better to show the average #downloads distribution for different ages.(i.e. this is also the problem that we pointed out in the Demographic Data Distribtuion part from the data quailty section. )
+
+
+```{r,warning=FALSE, message=FALSE}
+
+a=subset(newdata,!is.na(Q17) & !is.na(Q6))
+g<-ggplot(a,aes(x=Q6, y=Q17,fill=Q6))
+g+geom_violin(trim = FALSE,colour = "#3366FF")+scale_y_continuous(breaks = seq(0,100,by=20))+ggtitle("Downloads over ages")+xlab("#Downloads")+ylab("Age")+labs(fill="Downloads")
+
+```
+
+
+
+Since this is the survey data, the number of downloads question is a multiple choice questions(i.e. (1) 0-1, (2) 2-5, (3) 6-10, (4) 11-20, (5) 21-30, (6) More than 30). Therefore, we cannot get exact numbers of downloads data for different people. We decided to use mean of each multiple choices as the exact number of downloads for each participator(i.e. (1) 0.5, (2) 2.5, (3) 8, (4) 15.5, (5) 25.5, (6) 30. In this way, we can calcualte our average downloads for each age by using age(i)=sum(#downloads for age(i))/count(age(i))
+
+As you can see in the average downloads graph, it has the similar distributions as age graph. Both of them are right skewed ditribution. It confirmed my thought from the violin graph: young people are more active on mobile apps. 
+
+
+```{r, warning=FALSE, message=FALSE}
+
+#in order to only remove the missing values from these two variables
+b=subset(newdata,!is.na(Q17) & !is.na(Q6))
+#create a new column to add the median from each downloads answer
+b[,"AvgDownloads"]= b$Q6
+levels(b$AvgDownloads)=c(1.5,2.5,8,15.5,25.5,30)
+
+#convert the factors to integer types
+b$AvgDownloads=as.integer(as.character(b$AvgDownloads))
+
+#calculate the average download for each age
+datasummary=ddply(b,.(Q17),summarise,mean=mean(AvgDownloads))
+
+
+ggplot(datasummary,aes(x=Q17,y=mean)) +geom_bar(stat="identity", width=0.85,fill="pink")+ggtitle("#Average Dowloads distributions over Ages") +ylab("#Downloads on Average")+xlab("Age")+scale_x_continuous(breaks = seq(0,100,by=20))
+
+```
+
+
+
+We decided to seperate ages distributions into 8 groups to see which groups are more active to do group analysis.
+
+As you can see below, participators in 11-21,22-32,33-43 are more active in apps. This drove us to be curious to see the different behaviors among these three groups(i.e. teenagers,young people, middle age people )
+
+```{r,warning=FALSE, message=FALSE}
+#age plot with categories
+#create 8 age groups
+b[,"ageclass"]= NA
+for(i in seq(1,8))
+{ b[b$Q17>=11*i & b$Q17<11*(i+1),147]=paste(11*i, "-",11*(i+1)-1)
+  
+}
+
+#mean vislization
+b$ageclass <- as.factor(b$ageclass)
+datasummary1=ddply(b,~ageclass,summarise,mean=mean(AvgDownloads))
+
+
+ggplot(datasummary1,aes(x=ageclass,y=mean)) +geom_bar(stat="identity", width=0.85,fill="pink")+ggtitle("#Average Downloads distributions over ages") +ylab("#Downloads on Average")+xlab("#Age")
+
+
+```
+
+
+
+This shows more intuitively that young people are more active in apps. It shows that there are 4 outliers for people who are younger than 43 years old, but people who are older than 43 years old follow this pattern: older people downloads less than younger people.
+```{r, warning=FALSE, message=FALSE}
+
+#make a subset with active user vs nonactive user
+b[,"activestatus"]= b$ageclass
+levels(b$activestatus)[1:3]="<43"
+levels(b$activestatus)[4:8]=">43"
+levels(b$activestatus)[2:3]=">43"
+datasummary2=ddply(b, .(activestatus,Q17),summarise,average=mean(AvgDownloads))
+
+colnames(datasummary2)[2:3]=c("Age","Downloads Average")
+
+ggparcoord(datasummary2,columns = 2:3,groupColumn=1,showPoints = TRUE,scale = "uniminmax")
+
+
+```
+
+
+### Two Variables Analysis
+
+#### Age Groups vs Device Type
+From the graph, Samsung, Apple, and Nokia are the three most popular ones among all the devices for all the three groups.
+
+```{r, warning=FALSE, message=FALSE}
+#only focuse on three groups, so we pick these three groups dataset
+finaldata=b[b$ageclass %in% c("11 - 21","22 - 32","33 - 43"), ]
+#non-NA age and device type columns
+a=finaldata[!is.na(finaldata$Q3_1_TEXT),c(3,147)]
+
+ggplot(a,aes(fill=ageclass,reorder_size(Q3_1_TEXT))) + geom_bar()+xlab("Device")+facet_grid(.~ageclass)+
+  theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+
+
+```
+Samsung, nokia, and apple dominated the mobile devices, so we decided to analyze the top three device over different age groups. 
+
+We found that Samsung are popular on all of age groups. However, teenagers preferred to use Samsung and Nokia, and older people preferred to use Samsung and apple. This makes senses since teenages usually did not make money at their age, they preferred to buy cheaper stuff. 
+
+Thus, companies should designs different versions apps(i.e.android and apple) for different peoples. 
+ 
+
+```{r, warning=FALSE, message=FALSE}
+#get only top 3 device types
+a1=subset(a,Q3_1_TEXT %in% c("apple","Samsung","nokia"))
+a1=droplevels(a1)
+colnames(a1)[1]='DeviceType'
+
+ggplot(data = a1) + geom_mosaic(aes(x = product(ageclass), fill = DeviceType)) + 
+  labs(x = "Age Class", y = "Proportion") + theme(panel.background = NULL)
+```
+
+#### Age Groups vs the question: when do you look for apps?
+
+-graph comparison
+
+The two graphs below are the ones that we want to analyze the question:"when do you look for apps?" among these three age groups.
+
+The first graph can show how's the distribution of the answers inside of different age groups. The second graph can tell each answer's distributions over different groups so that we can compare the each answer in differetn age groups. 
+
+
+-findings 
+
+As you can see on the first, most people use the app for entertainment.However, in the second graph, older people use it more for study or work, and most younger people used it for fun. 
+
+Therefore, first, we should not only target young people for more entiertainment games, but we can also target older people too since 30% of them would like to have apps for fun. 
+
+Secondly, we can make some useful app for older people for their work use and some intersting leanring or reading apps for them to gain more knowledge. 
+
+```{r, warning=FALSE, message=FALSE}
+a=finaldata[,c(10:15)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q7_1))
+b2=as.integer(as.character(a$Q7_2))
+b3=as.integer(as.character(a$Q7_3))
+b4=as.integer(as.character(a$Q7_4))
+b5=as.integer(as.character(a$Q7_5))
+b6=as.integer(as.character(a$Q7_6))
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6))
+final["ageclass"]=finaldata$ageclass
+final["Sex"]=finaldata$Q16
+final[is.na(final)]=0
+datasummary=ddply(final,.(ageclass,Sex),summarise,q7_1=sum(b1),q7_2=sum(b2),q7_3=sum(b3),q7_4=sum(b4),q7_5=sum(b5),q7_6=sum(b6))
+
+
+colnames(datasummary) <- c("ageclass","Sex", "When feeling depressed","When I need to carry out a task","When I am feeling bored","When I want to be entertained","When I need to know something","Others")
+
+library(reshape)
+data_when= melt(datasummary, id=c("ageclass","Sex"))
+
+#change it to percent
+first_total=sum(subset(data_when,ageclass=="11 - 21")[,4])
+second_total=sum(subset(data_when,ageclass=="22 - 32")[,4])
+third_total=sum(subset(data_when,ageclass=="33 - 43")[,4])
+data_when_percent=data_when
+data_when_percent[data_when$ageclass=="11 - 21",4]=data_when[data_when$ageclass=="11 - 21",4]/first_total
+data_when_percent[data_when$ageclass=="22 - 32",4]=data_when[data_when$ageclass=="22 - 32",4]/second_total
+data_when_percent[data_when$ageclass=="33 - 43",4]=data_when[data_when$ageclass=="33 - 43",4]/third_total
+data_when_percentQ7=data_when_percent
+#faceting the barchart
+ggplot(data=data_when_percentQ7, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5,)+ylab("frequency percentage
+")+xlab("When do you look for apps?")+facet_grid(.~ageclass)+
+  theme(axis.text.x=element_text(angle=90,hjust=1,vjust=0.5))
+
+#barchart
+data_when_percentQ7=data_when_percent
+ggplot(data=data_when_percentQ7, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5,)+ylab("responds percent")+coord_flip()+xlab("When do you look for apps?")
+
+
+
+
+```
+
+#### Age Groups vs the question: Why do you download an app?
+
+We got the same conclusions as above: young peole have apps for fun, and older people have apps for study or work from two graphs belows. However, entertainment will still be a good topic for apps, which suitable for all of them.
+
+This graph shows that most time, teenagers have apps for fun. You can see this result especially from long red bart on "for entertainment" and "out of curiosity". Also, you can see a blue long bart on "to help me out a task" on mid-age people. 
+
+Since there are too many reasons to download apps, so we decided to take closer look at only top 5 to do more user behaivor analysis.
+
+
+```{r, warning=FALSE, message=FALSE}
+#subset the age and answers column for why do you download an app
+a=finaldata[,c(38:52)]
+#change the factor type to integer type and generate a table with responses distributions over age groups
+
+b1=as.integer(as.character(a$Q10_1))
+b2=as.integer(as.character(a$Q10_2))
+b3=as.integer(as.character(a$Q10_3))
+b4=as.integer(as.character(a$Q10_4))
+b5=as.integer(as.character(a$Q10_5))
+b6=as.integer(as.character(a$Q10_6))
+b7=as.integer(as.character(a$Q10_7))
+b8=as.integer(as.character(a$Q10_8))
+b9=as.integer(as.character(a$Q10_9))
+b10=as.integer(as.character(a$Q10_10))
+b11=as.integer(as.character(a$Q10_11))
+b12=as.integer(as.character(a$Q10_12))
+b13=as.integer(as.character(a$Q10_13))
+b14=as.integer(as.character(a$Q10_14))
+b15=as.integer(as.character(a$Q10_15))
+
+
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15))
+final["ageclass"]=finaldata$ageclass
+final[is.na(final)]=0
+datasummary=ddply(final,~ageclass,summarise,q10_1=sum(b1),q10_2=sum(b2),q10_3=sum(b3),q10_4=sum(b4),q10_5=sum(b5),q10_6=sum(b6),q10_7=sum(b7),q10_8=sum(b8),q10_9=sum(b9),q10_10=sum(b10),q10_11=sum(b11),q10_12=sum(b12),q10_13=sum(b13),q10_14=sum(b14),q10_15=sum(b15))
+
+
+colnames(datasummary) <- c("ageclass", "To interact with friends and/or family","To interact with people I don't know","To help me carry out a task","It is featured in the app store","It is on the top downloads chart","It is advertised in the apps that I am using","For entertainment","Out of curiosity","An impulsive purchase","It features brands or celebrities that I like","It was mentioned in the media","It is an extension of the website that I use ","It is recommended by friends and/or family","For someone else","Other ")
+
+data_why= melt(datasummary, id=c("ageclass"))
+
+#percentage calculation
+first_total=sum(subset(data_why,ageclass=="11 - 21")[,3])
+second_total=sum(subset(data_why,ageclass=="22 - 32")[,3])
+third_total=sum(subset(data_why,ageclass=="33 - 43")[,3])
+data_why_percent=data_why
+data_why_percent[data_why$ageclass=="11 - 21",3]=data_why[data_why$ageclass=="11 - 21",3]/first_total
+data_why_percent[data_why$ageclass=="22 - 32",3]=data_why[data_why$ageclass=="22 - 32",3]/second_total
+data_why_percent[data_why$ageclass=="33 - 43",3]=data_why[data_why$ageclass=="33 - 43",3]/third_total
+
+data_why_percent_Q10=data_why_percent
+#percent plot
+ggplot(data=data_why_percent, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5)+ylab("frequency percentage
+")+coord_flip()+xlab("Why do you download an app?")
+
+
+
+
+
+```
+
+
+By comparing the order of top 5 reasons in ages, it is clear to find that for younger people(i.e. 11-21 and 22-32), the main reasons for them to download apps are for entertainment. However, as people get older, they tend to download the apps for work or study. 
+
+```{r,warning=FALSE, message=FALSE}
+
+#pick the top 5 reasons and plot 3 individual age groups barchart with 5 reasons distribtuions
+
+data_why_percent_Q10_1=subset(data_why_percent_Q10,ageclass=="11 - 21")
+data_why_percent_Q10_2=subset(data_why_percent_Q10,ageclass=="22 - 32")
+data_why_percent_Q10_3=subset(data_why_percent_Q10,ageclass=="33 - 43")
+a1=data_why_percent_Q10_1[with(data_why_percent_Q10_1, order(-value)), ][1:5,]
+a2=data_why_percent_Q10_2[with(data_why_percent_Q10_2, order(-value)), ][1:5,]
+a3=data_why_percent_Q10_3[with(data_why_percent_Q10_3, order(-value)), ][1:5,]
+
+
+data_why_percent_Q10_top5=subset(data_why_percent_Q10,variable %in% a1)
+
+
+
+
+cs <- ggplot(a1,aes(x=reorder(variable,-value),y=value)) + geom_bar(stat="identity",fill="pink")+ylab("11-21")+theme(axis.text.x=element_text(color = "black", size=6, angle=90, vjust=.8, hjust=0.8))+xlab("")+ggtitle("11-21")+ylab("percent")
+
+sx <- ggplot(a2,aes(x=reorder(variable,-value),y=value)) + geom_bar(stat="identity",fill="lightgreen")+ylab("")+ theme(axis.text.x=element_text(color = "black", size=6, angle=90, vjust=.8, hjust=0.8))+xlab("")+ggtitle("22-32")
+
+ag <- ggplot(a3,aes(x=reorder(variable,-value),y=value)) + geom_bar(stat="identity",fill="lightblue")+theme(axis.text.x=element_text(color = "black", size=6, angle=90, vjust=.8, hjust=0.8))+xlab("")+ggtitle("33-43")+ylab("")
+
+
+grid.arrange(cs, sx, ag, ncol=3)
+```
+
+#### Age Groups vs the question: How do you find apps?
+
+
+As you see below, all of them like to use keywords to search an app. Teenagers and young people try apps based on their interest and rank since young people chose. "I browse randomly for apps that might interests me" and "I look at the top download chart". However, older people tends to choose the apps by reviews.  Therefore, companies can make more efforts on marketing(etc.marketing) to target young people.
+
+```{r,warning=FALSE, message=FALSE}
+
+#subset the answers column for how do you find apps and generate a table with responses #distributions over age groups
+a=finaldata[,c(16:24)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q8_1))
+b2=as.integer(as.character(a$Q8_2))
+b3=as.integer(as.character(a$Q8_3))
+b4=as.integer(as.character(a$Q8_4))
+b5=as.integer(as.character(a$Q8_5))
+b7=as.integer(as.character(a$Q8_7))
+b8=as.integer(as.character(a$Q8_8))
+b9=as.integer(as.character(a$Q8_9))
+b10=as.integer(as.character(a$Q8_10))
+final=data.frame(cbind(b1,b2,b3,b4,b5,b7,b8,b9,b10))
+final["ageclass"]=finaldata$ageclass
+final[is.na(final)]=0
+datasummary=ddply(final,~ageclass,summarise,q8_1=sum(b1),q8_2=sum(b2),q8_3=sum(b3),q8_4=sum(b4),q8_5=sum(b5),q8_7=sum(b7),q8_8=sum(b8),q8_9=sum(b9),q8_10=sum(b10))
+
+
+colnames(datasummary) <- c("ageclass", "I compare several apps in order to choose the best ones","I download the first app that I see on the list of apps presented to me","I look for apps that are featured on the front page of the app store","I look at the top downloads chart","I browse randomly for apps that might interest me","I search the app store using keywords","I visit websites that review apps","I use search engines (e.g., Google)","Other")
+
+data_how= melt(datasummary, id=c("ageclass"))
+
+#percentage calculation
+first_total=sum(subset(data_how,ageclass=="11 - 21")[,3])
+second_total=sum(subset(data_how,ageclass=="22 - 32")[,3])
+third_total=sum(subset(data_how,ageclass=="33 - 43")[,3])
+data_how_percent=data_how
+data_how_percent[data_how$ageclass=="11 - 21",3]=data_how[data_how$ageclass=="11 - 21",3]/first_total
+data_how_percent[data_how$ageclass=="22 - 32",3]=data_how[data_how$ageclass=="22 - 32",3]/second_total
+data_how_percent[data_how$ageclass=="33 - 43",3]=data_how[data_how$ageclass=="33 - 43",3]/third_total
+
+data_how_percent_Q8=data_how_percent
+#percent plot
+ggplot(data=data_how_percent, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5,)+ylab("frequency  percentage")+coord_flip()+xlab("How do you find apps?")
+
+
+
+```
+
+#### Age Groups vs the question: Why do you spend money on an app?
+
+It is interesting to find that people ususally prefer to use free apps escpically for teenagers.The red bart is very long on "I do not pay for apps"
+```{r,warning=FALSE, message=FALSE}
+library(reshape)
+#subset the answers column for Why do you spend money on an app and generate a table with responses #distributions over age groups
+a=finaldata[,c(53:64)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q11_1))
+b2=as.integer(as.character(a$Q11_2))
+b3=as.integer(as.character(a$Q11_3))
+b4=as.integer(as.character(a$Q11_4))
+b5=as.integer(as.character(a$Q11_5))
+b6=as.integer(as.character(a$Q11_6))
+b11=as.integer(as.character(a$Q11_11))
+b12=as.integer(as.character(a$Q11_12))
+b7=as.integer(as.character(a$Q11_7))
+b8=as.integer(as.character(a$Q11_8))
+b9=as.integer(as.character(a$Q11_9))
+b10=as.integer(as.character(a$Q11_10))
+
+
+
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b11,b12,b7,b8,b9,b10))
+final["ageclass"]=finaldata$ageclass
+final[is.na(final)]=0
+datasummary=ddply(final,~ageclass,summarise,q11_1=sum(b1),q11_2=sum(b2),q11_3=sum(b3),q11_4=sum(b4),q11_5=sum(b5),q11_6=sum(b6),q11_11=sum(b11),q11_12=sum(b12),q11_7=sum(b7),q11_8=sum(b8),q11_9=sum(b9),q11_10=sum(b10))
+
+
+colnames(datasummary) <- c("ageclass", "I do not pay for apps","To remove advertisements from the app","The paid app is on sale for a reduced price","To subscribe to free content","The app is initially free but I have to pay for features that I want","I can’t find a free app with similar features","I think paid apps have better quality than free apps in general","I think paid apps have more features than free apps in general","To get additional features or content for a paid app","To subscribe to paid content","Compared to free apps with similar features, the paid app appears to be of better quality","Other")
+
+data_why= melt(datasummary, id=c("ageclass"))
+
+#percentage calculation
+first_total=sum(subset(data_why,ageclass=="11 - 21")[,3])
+second_total=sum(subset(data_why,ageclass=="22 - 32")[,3])
+third_total=sum(subset(data_why,ageclass=="33 - 43")[,3])
+data_why_percent=data_why
+data_why_percent[data_why$ageclass=="11 - 21",3]=data_why[data_why$ageclass=="11 - 21",3]/first_total
+data_why_percent[data_why$ageclass=="22 - 32",3]=data_why[data_why$ageclass=="22 - 32",3]/second_total
+data_why_percent[data_why$ageclass=="33 - 43",3]=data_why[data_why$ageclass=="33 - 43",3]/third_total
+
+#percent plot
+ggplot(data=data_why_percent, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5,)+ylab("frequency percentge")+coord_flip()+xlab("Why do you spend money on an app?")
+
+
+```
+
+
+
+#### Age Groups vs the question: Why do you rate apps?
+
+
+
+The graph below shows that young people(i.e 22-32) are more willing to rate an app than others. Since people between 11-21 years old get the least respondent percent compared others in the "I don't rate app" choice, but they get hihest respondent percent in other choices.
+```{r, warning=FALSE, message=FALSE}
+#subset the answers column for Why do you rate apps and generate a table with responses #distributions over age groups
+a=finaldata[,c(65:71)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q13_1))
+b2=as.integer(as.character(a$Q13_2))
+b3=as.integer(as.character(a$Q13_3))
+b4=as.integer(as.character(a$Q13_4))
+b5=as.integer(as.character(a$Q13_5))
+b6=as.integer(as.character(a$Q13_6))
+b7=as.integer(as.character(a$Q13_7))
+
+
+
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7))
+final["ageclass"]=finaldata$ageclass
+final[is.na(final)]=0
+datasummary=ddply(final,~ageclass,summarise,q13_1=sum(b1),q13_2=sum(b2),q13_3=sum(b3),q13_4=sum(b4),q13_5=sum(b5),q13_6=sum(b6),q13_17=sum(b7))
+
+
+colnames(datasummary) <- c("ageclass", "I don’t rate apps","To let other users to know that the app is good","Someone asked me to do so","The app asked me to rate it","To let other users to know that the app is bad","The app rewards me for rating it","Other")
+
+data_why= melt(datasummary, id=c("ageclass"))
+
+
+#percent
+first_total=sum(subset(data_why,ageclass=="11 - 21")[,3])
+second_total=sum(subset(data_why,ageclass=="22 - 32")[,3])
+third_total=sum(subset(data_why,ageclass=="33 - 43")[,3])
+data_why_percent=data_why
+data_why_percent[data_why$ageclass=="11 - 21",3]=data_why[data_why$ageclass=="11 - 21",3]/first_total
+data_why_percent[data_why$ageclass=="22 - 32",3]=data_why[data_why$ageclass=="22 - 32",3]/second_total
+data_why_percent[data_why$ageclass=="33 - 43",3]=data_why[data_why$ageclass=="33 - 43",3]/third_total
+#percent plot
+# This looks like that 22-32 people focus more on rating the app
+ggplot(data=data_why_percent, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5,)+ylab("frequency percentage")+coord_flip()+xlab("Why do you rate apps?")
+
+
+```
+
+
+###Three variables analysis
+
+#### Age Groups vs Gender vs the question: What makes you stop using an app?
+
+
+From the first graph, teenagers behaved very differently from others. They seem like to stop using an app when they are  not interested in them at all. 
+
+It was more interesting to see that behavior in female and male in young age are very different from the second graph. Compared to the first graph, stopping using an app when they are not intesested in them at all are mainly caused by teenagers female rather than male when we look at the red bars.
+
+Also, when compare the different ages in female and male groups, female teenagers looks very different from other femal age groups. Compared to the female teenagers, male teenagers looks more similar to other two male age groups.
+
+
+```{r,warning=FALSE, message=FALSE}
+#subset the answers column for What makes you stop using an app with responses #distributions over age groups
+a=finaldata[,c(72:86)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q14_1))
+b2=as.integer(as.character(a$Q14_2))
+b3=as.integer(as.character(a$Q14_3))
+b4=as.integer(as.character(a$Q14_4))
+b5=as.integer(as.character(a$Q14_5))
+b6=as.integer(as.character(a$Q14_6))
+b7=as.integer(as.character(a$Q14_7))
+b8=as.integer(as.character(a$Q14_8))
+b9=as.integer(as.character(a$Q14_9))
+b10=as.integer(as.character(a$Q14_10))
+b11=as.integer(as.character(a$Q14_11))
+b12=as.integer(as.character(a$Q14_12))
+b13=as.integer(as.character(a$Q14_13))
+b15=as.integer(as.character(a$Q14_15))
+b14=as.integer(as.character(a$Q14_14))
+
+
+
+
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b15,b14))
+final["ageclass"]=finaldata$ageclass
+final["Sex"]=finaldata$Q16
+final[is.na(final)]=0
+datasummary=ddply(final,.(ageclass,Sex),summarise,q14_1=sum(b1),q14_2=sum(b2),q14_3=sum(b3),q14_4=sum(b4),q14_5=sum(b5),q14_6=sum(b6),q14_7=sum(b7),q14_8=sum(b8),q14_9=sum(b9),q14_10=sum(b10),q14_11=sum(b11),q14_12=sum(b12),q14_13=sum(b13),q14_15=sum(b15),q14_14=sum(b14))
+
+
+colnames(datasummary) <- c("ageclass","Sex","It Crashes","I found better alternatives","The advertisements are annoying","It is difficult to use","It is no longer used by my friends and/or family","I need to pay extra for the features I need","I forgot about the app","I do not need the features it provides","It invades my privacy","It is too slow","I got bored of it","It does not work","It does not have the features I hoped for","I don't need it anymore","Other")
+
+data_why= melt(datasummary, id=c("ageclass","Sex"))
+
+#percent
+first_total=sum(subset(data_why,ageclass=="11 - 21")[,4])
+second_total=sum(subset(data_why,ageclass=="22 - 32")[,4])
+third_total=sum(subset(data_why,ageclass=="33 - 43")[,4])
+data_why_percent=data_why
+data_why_percent[data_why$ageclass=="11 - 21",4]=data_why[data_why$ageclass=="11 - 21",4]/first_total
+data_why_percent[data_why$ageclass=="22 - 32",4]=data_why[data_why$ageclass=="22 - 32",4]/second_total
+data_why_percent[data_why$ageclass=="33 - 43",4]=data_why[data_why$ageclass=="33 - 43",4]/third_total
+
+data_why_percent_Q14=data_why_percent
+
+#percent plot
+
+
+ggplot(data=data_why_percent, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5,)+ylab("frequency percentage")+coord_flip()+xlab("What makes you stop using an app?")
+
+ggplot(data=data_why_percent, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5,)+ylab("frequency percentage")+coord_flip()+xlab("What makes you stop using an app?")+facet_grid(.~Sex)
+
+#Diverging Stacked Bar Chart
+ggplot(data_why_percent, aes(x=reorder(variable,value), y=value,fill=Sex)) + 
+      geom_bar(data = subset(data_why_percent, Sex=="Female"),
+               aes(y = -value), position="stack", stat="identity") +
+      geom_bar(data = subset(data_why_percent,Sex=="Male"), 
+               aes(y = value), position="stack", stat="identity")+coord_flip()+facet_grid(.~ageclass)+xlab("What makes you stop using an app?")
+
+
+
+
+```
+
+
+#### Age Groups vs Gender vs the question: Which type of apps do you download?
+
+
+As you can see the first graph, that teenagers are more in Games, social network,Music, and photos compared to other ages.  However, if you only look at top 5 in the second graph, Games, social network, Music are the most popular three areas that people download the apps. The diverging stacked bar chart can not see the big difference between female and male teenagers intuitively too.
+
+
+
+```{r, warning=FALSE, message=FALSE}
+a=finaldata[,c(87:109,110)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q15_1))
+b2=as.integer(as.character(a$Q15_2))
+b3=as.integer(as.character(a$Q15_3))
+b4=as.integer(as.character(a$Q15_4))
+b5=as.integer(as.character(a$Q15_5))
+b6=as.integer(as.character(a$Q15_6))
+b7=as.integer(as.character(a$Q15_7))
+b8=as.integer(as.character(a$Q15_8))
+b9=as.integer(as.character(a$Q15_9))
+b10=as.integer(as.character(a$Q15_10))
+b11=as.integer(as.character(a$Q15_11))
+b12=as.integer(as.character(a$Q15_12))
+b13=as.integer(as.character(a$Q15_13))
+b14=as.integer(as.character(a$Q15_14))
+b15=as.integer(as.character(a$Q15_15))
+b16=as.integer(as.character(a$Q15_16))
+b17=as.integer(as.character(a$Q15_17))
+b18=as.integer(as.character(a$Q15_18))
+b19=as.integer(as.character(a$Q15_19))
+b20=as.integer(as.character(a$Q15_20))
+b21=as.integer(as.character(a$Q15_21))
+b22=as.integer(as.character(a$Q15_22))
+b23=as.integer(as.character(a$Q15_23))
+
+
+
+
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b15,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23))
+final["ageclass"]=finaldata$ageclass
+final["Sex"]=finaldata$Q16
+final[is.na(final)]=0
+datasummary=ddply(final,.(ageclass,Sex),summarise,q15_1=sum(b1),q15_2=sum(b2),q15_3=sum(b3),q15_4=sum(b4),q15_5=sum(b5),q15_6=sum(b6),q15_7=sum(b7),q15_8=sum(b8),q15_9=sum(b9),q15_10=sum(b10),q15_11=sum(b11),q15_12=sum(b12),q15_13=sum(b13),q15_14=sum(b14),q15_15=sum(b15),q15_16=sum(b16),q15_17=sum(b17),q15_18=sum(b18),q15_19=sum(b19),q15_20=sum(b20),q15_21=sum(b21),q15_22=sum(b22),q15_23=sum(b23))
+
+
+
+colnames(datasummary) <- c("ageclass","Sex","Navigation","Business","Catalogues","Travel","Books ","Photo","Lifestyle","Entertainment","Finance","News","Health & fitness","Games","Food & drink","Education","Medical","Social networking","Reference","Sports","Utilities","Weather","Productivity","Music","others")
+
+data_why= melt(datasummary, id=c("ageclass","Sex"))
+
+
+#percentage calcuation
+first_total=sum(subset(data_why,ageclass=="11 - 21")[,4])
+second_total=sum(subset(data_why,ageclass=="22 - 32")[,4])
+third_total=sum(subset(data_why,ageclass=="33 - 43")[,4])
+data_why_percent=data_why
+data_why_percent[data_why$ageclass=="11 - 21",4]=data_why[data_why$ageclass=="11 - 21",4]/first_total
+data_why_percent[data_why$ageclass=="22 - 32",4]=data_why[data_why$ageclass=="22 - 32",4]/second_total
+data_why_percent[data_why$ageclass=="33 - 43",4]=data_why[data_why$ageclass=="33 - 43",4]/third_total
+
+
+data_why_percent_Q15=data_why_percent
+data_why_Q15=data_why
+#percent plot
+ggplot(data=data_why_percent, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5,)+ylab("responds percent")+coord_flip()+xlab("Which type of apps do you download?")
+
+#only look at top 5
+data_why_Q15=ddply(data_why_Q15,.(ageclass,variable),summarise,value=sum(value))
+data_why_Q15_1=subset(data_why_Q15,ageclass=="11 - 21")
+data_why_Q15_2=subset(data_why_Q15, ageclass=="22 - 32")
+data_why_Q15_3=subset(data_why_Q15,ageclass=="33 - 43")
+a1=data_why_Q15_1[with(data_why_Q15_1, order(-value)), ][1:5,]
+a2=data_why_Q15_2[with(data_why_Q15_2, order(-value)), ][1:5,]
+a3=data_why_Q15_3[with(data_why_Q15_3, order(-value)), ][1:5,]
+##they are the same
+
+
+
+cs <- ggplot(a1,aes(x=reorder(variable,-value),y=value)) + geom_bar(stat="identity",fill="pink")+ylab("11-21")+theme(axis.text.x=element_text(color = "black", size=6, angle=90, vjust=.8, hjust=0.8))+xlab("")+ggtitle("11-21")+ylab("percent")
+
+sx <- ggplot(a2,aes(x=reorder(variable,-value),y=value)) + geom_bar(stat="identity",fill="lightgreen")+ylab("")+ theme(axis.text.x=element_text(color = "black", size=6, angle=90, vjust=.8, hjust=0.8))+xlab("")+ggtitle("22-32")
+
+ag <- ggplot(a3,aes(x=reorder(variable,-value),y=value)) + geom_bar(stat="identity",fill="lightblue")+theme(axis.text.x=element_text(color = "black", size=6, angle=90, vjust=.8, hjust=0.8))+xlab("")+ggtitle("33-43")+ylab("")
+#add a title
+grid.arrange(cs, sx, ag, ncol=3)
+
+
+
+
+
+
+
+```
+
+
+
+
+
+After we have the suprising finding for female user behavior, we are also interested seeing whehther there different patterns between female and male. 
+
+From the first graph,  it seems like that female teenagers behave very differently compared to other two female groups. female caused the total percentage of Games, social network, Music, and photos to be so high in three age groups. 
+
+From the second graph, female teenagers seems to be more active than male teenagers, while female and males in other groups are the similar. 
+
+Since the conclusion that female teenagers is the most active app users among these groups shocks me, so we decided to choose one of these three graphs to our summary. The first graph seems to show the result more intitively and contain more information. Since it does not only comapre genders in different age groups(i.e. female teenagers are more interested in games than male teenagers) but also compare the different age groups among female and male(i.e. female teenagers behave differenlty from other two female teenagers). The second graph is only good for comparing genders in different age groups. There are too many subplots in the third graph, which will not show the result intivtively. The diverging stacked bar chart can not see the big difference between female and male teenagers intuitively too.
+
+
+```{r,warning=FALSE, message=FALSE}
+
+ggplot(data=data_why_percent, aes(x=reorder(variable,value), y=value, fill=ageclass)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5)+ylab("freqency percentage")+coord_flip()+xlab("Which type of apps do you download?")+facet_grid(.~(Sex))+labs(fill="AgeGroup") 
+
+
+
+ggplot(data=data_why_percent, aes(x=reorder(variable,value), y=value, fill=Sex)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5,)+ylab("freqency percentage")+coord_flip()+xlab("Which type of apps do you download?")+facet_grid(.~ageclass)
+
+
+
+ggplot(data=data_why_percent, aes(x=reorder(variable,value), y=value,fill=Sex)) + 
+     geom_bar(stat="identity",position = "dodge",width=0.5)+ylab("freqency percentage")+coord_flip()+xlab("Which type of apps do you download?")+facet_grid(Sex~ageclass)
+
+
+#Diverging Stacked Bar Chart
+ggplot(data_why_percent, aes(x=reorder(variable,value), y=value,fill=Sex)) + 
+      geom_bar(data = subset(data_why_percent, Sex=="Female"),
+               aes(y = -value), position="stack", stat="identity") +
+      geom_bar(data = subset(data_why_percent,Sex=="Male"), 
+               aes(y = value), position="stack", stat="identity")+coord_flip()+facet_grid(.~ageclass)+xlab("Which type of apps do you download?")
+
+
+```
+
+
+##Country
+
+This graph shows the number of participants in each country. It has nothing to do with the population, namely oversampling and undersampling can exist for some countries. That's why the following anaysis regarding country are all based on the percentage. We will focus on USA, China and France in the following research. 
+```{r, warning=FALSE, message=FALSE}
+ggplot(newdata[!is.na(newdata$Q19),],aes(reorder_size(Q19))) +geom_bar(fill="red")+xlab("Country")+coord_flip()
+```
+
+###Relation between country and sex
+The mosaic graph shows that male participants overwhelmingly surpass females in China, India and Japan, which infers males have a large share of population in Asia.   
+So the following analysis of Chinese mobile user behavior is more representative for Chinese males. 
+
+```{r, warning=FALSE, message=FALSE}
+newdata1=subset(newdata, select=c("Q16", "Q19" ))
+newdata1=subset(newdata1,Q19 %in% c("USA","China", "France", "Japan", "India"))
+
+colnames(newdata1)[1]="Sex"
+colnames(newdata1)[2]="Country"
+
+newdata1$Sex=factor(newdata1$Sex)
+newdata1$Country=factor(newdata1$Country)
+
+#mosaic(Sex~Country, data = newdata1[!is.na(newdata1$Sex),], direction = c("v","h"),shade = T,gp = gpar(fill = c("grey90", "red")))
+
+ggplot(data = newdata1) + geom_mosaic(aes(x = product(Country), fill = Sex)) + 
+  labs(x = "Country", y = "Sex proportion") + theme(panel.background = NULL)
+
+```
+
+
+### Relation between country and reason for stopping using an app
+
+The following bar chart reveals the specific reason for stopping using an app in each country. 
+
+- Chinese users pay more attention to the feature. "It doesn't have the features I hope for" receives most votes.
+
+- Unlike Chinese users, "It is no longer used by my friends and/or family" become the most possible reason for an American user to stop using an app. 
+
+- There's an interesting phenomenon among French users. They never got bored of an app (no vote on "It does not work"). So the apps for French users don't need to be upgraded frequently. Instead, the first edition is of paramount importance. Besides, French people have a strong sense of privacy protection and "It invades my privacy" ranks first. 
+
+```{r, warning=FALSE, message=FALSE}
+newdata1=subset(newdata,Q19 %in% c("USA","China","France"))
+a=newdata1[,c(72:86)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q14_1))
+b2=as.integer(as.character(a$Q14_2))
+b3=as.integer(as.character(a$Q14_3))
+b4=as.integer(as.character(a$Q14_4))
+b5=as.integer(as.character(a$Q14_5))
+b6=as.integer(as.character(a$Q14_6))
+b7=as.integer(as.character(a$Q14_7))
+b8=as.integer(as.character(a$Q14_8))
+b9=as.integer(as.character(a$Q14_9))
+b10=as.integer(as.character(a$Q14_10))
+b11=as.integer(as.character(a$Q14_11))
+b12=as.integer(as.character(a$Q14_12))
+b13=as.integer(as.character(a$Q14_13))
+b14=as.integer(as.character(a$Q14_14))
+b15=as.integer(as.character(a$Q14_15))
+#summary table
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15))
+final["country"]=newdata1$Q19
+final[is.na(final)]=0
+datasummary=ddply(final,~country,summarise,q14_1=sum(b1),q14_2=sum(b2),q14_3=sum(b3),q14_4=sum(b4),q14_5=sum(b5),q14_6=sum(b6),q14_7=sum(b7),q14_8=sum(b8),q14_9=sum(b9),q14_10=sum(b10),q14_11=sum(b11),q14_12=sum(b12),q14_13=sum(b13),q14_14=sum(b14),q14_15=sum(b15))
+
+#calculate percentage
+total = rowSums(datasummary[,c("q14_1","q14_2","q14_3","q14_4","q14_5","q14_6","q14_7","q14_8","q14_9","q14_10","q14_11","q14_12","q14_13","q14_14","q14_15")])
+for (i in seq(1,nrow(datasummary))){
+  for (j in seq(2,ncol(datasummary)))
+  datasummary[i,j] = datasummary[i,j]/total[i]
+}
+
+library(reshape)
+data_stop = melt(datasummary, id=c("country"))
+
+levels(data_stop$variable)[1:15]=c("It crashes","I found better alternatives","The advertisements are annoying","It is difficult to use.","It is no longer used by my friends and/or family","I need to pay extra for the features I need","I forgot about the app","    I do not need the features it provides","It invades my privacy","It is too slow","    I got bored of it","It does not work","It does not have the features I hoped for","I don't need it anymore", "Other")
+
+ggplot(data_stop,aes(variable,data_stop$value)) +geom_bar(fill="red",stat='identity')+xlab("Stop Using Reason")+ylab("Percentage")+coord_flip()+facet_grid(.~country)+ scale_y_continuous(name = "Percentage", breaks= seq(0, 0.15, 0.05)) 
+
+```
+
+###Relation between country and download frequency per month
+The mosaic graph is presented by 5 colors. Frequency increases from dark red, light red, light grey, light blue to dark blue,  
+We can see from the graph that most French users have a low download frequency (0-1 times per month), fits right the conclusion we've drawn earlier that Frechmen never get bored of an app. They stick to the old ones, seldom downloading new apps. The acitivity of Chinese users shows an energetic Chinese market. 
+```{r, warning=FALSE, message=FALSE}
+newdata1=subset(newdata, select=c("Q6", "Q19" ))
+newdata1=subset(newdata1,Q19 %in% c("USA","China","France"))
+
+colnames(newdata1)[1]="Downloads"
+colnames(newdata1)[2]="Country"
+
+newdata1$Downloads=factor(newdata1$Downloads)
+newdata1$Country=factor(newdata1$Country)
+
+#mosaic(Country~Downloads, data = newdata1[!is.na(newdata1$Downloads),],main="Country vs #app downloads", direction = c("v","h"),shade = T,gp = shading_hcl, gp_args = list(interpolate = c(1,4,7.6)), labeling= labeling_border(rot_labels = c(90,0,0,0), just_labels = c("center", "center",  "center", "center"),gp_labels = gpar(fontsize = 8)), legend=FALSE) 
+
+ggplot(data = newdata1[!is.na(newdata1$Downloads),]) + geom_mosaic(aes(x = product(Country), fill = Downloads)) + 
+  labs(x = "Country", y = "#app downloads") + theme(panel.background = NULL)
+
+```
+
+###Relation between country and download app type
+plot in summary:
+```{r, warning=FALSE, message=FALSE}
+newdata1=subset(newdata,Q19 %in% c("USA","China","France"))
+a=newdata1[,c(87:109)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q15_1))
+b2=as.integer(as.character(a$Q15_2))
+b3=as.integer(as.character(a$Q15_3))
+b4=as.integer(as.character(a$Q15_4))
+b5=as.integer(as.character(a$Q15_5))
+b6=as.integer(as.character(a$Q15_6))
+b7=as.integer(as.character(a$Q15_7))
+b8=as.integer(as.character(a$Q15_8))
+b9=as.integer(as.character(a$Q15_9))
+b10=as.integer(as.character(a$Q15_10))
+b11=as.integer(as.character(a$Q15_11))
+b12=as.integer(as.character(a$Q15_12))
+b13=as.integer(as.character(a$Q15_13))
+b14=as.integer(as.character(a$Q15_14))
+b15=as.integer(as.character(a$Q15_15))
+b16=as.integer(as.character(a$Q15_16))
+b17=as.integer(as.character(a$Q15_17))
+b18=as.integer(as.character(a$Q15_18))
+b19=as.integer(as.character(a$Q15_19))
+b20=as.integer(as.character(a$Q15_20))
+b21=as.integer(as.character(a$Q15_21))
+b22=as.integer(as.character(a$Q15_22))
+b23=as.integer(as.character(a$Q15_23))
+
+#summary table
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23))
+final["country"]=newdata1$Q19
+final[is.na(final)]=0
+datasummary=ddply(final,~country,summarise,q15_1=sum(b1),q15_2=sum(b2),q15_3=sum(b3),q15_4=sum(b4),q15_5=sum(b5),q15_6=sum(b6),q15_7=sum(b7),q15_8=sum(b8),q15_9=sum(b9),q15_10=sum(b10),q15_11=sum(b11),q15_12=sum(b12),q15_13=sum(b13),q15_14=sum(b14),q15_15=sum(b15),q15_16=sum(b16),q15_17=sum(b17),q15_18=sum(b18),q15_19=sum(b19),q15_20=sum(b20),q15_21=sum(b21),q15_22=sum(b22),q15_23=sum(b23))
+
+#calculate percentage
+total = rowSums(datasummary[,c("q15_1","q15_2","q15_3","q15_4","q15_5","q15_6","q15_7","q15_8","q15_9","q15_10","q15_11","q15_12","q15_13","q15_14","q15_15","q15_16","q15_17","q15_18","q15_19","q15_20","q15_21","q15_22","q15_23")])
+for (i in seq(1,nrow(datasummary))){
+  for (j in seq(2,ncol(datasummary)))
+  datasummary[i,j] = datasummary[i,j]/total[i]
+}
+
+data_type= melt(datasummary, id=c("country"))
+colnames(data_type)[2] = "AppType"
+levels(data_type$AppType)[1:23]=c("Navigation","Business","Catalogues","Travel","Books", "Photo & video", "Lifestyle","Entertainment", "Finance", "News", "Health & fitness", "Games", "Food & drink", "Education", "Medical", "Social networking", "Reference", "Sports", "Utilities", "Weather", "Productivity", "Music", "Other")
+
+
+#reorder by factor
+data_type$AppType = factor(data_type$AppType, levels = c("Books","Business", "Sports","Food & drink", "Photo & video", "Navigation","Games", "Social networking"), order = TRUE)
+data_type = subset(data_type,!is.na(AppType))
+
+par(mgp = c(3, 10, 100))
+ggplot(data_type,aes(AppType,value)) +geom_bar(fill="lightskyblue",stat='identity')+xlab("APP Type")+coord_flip()+facet_grid(.~country)+ scale_y_continuous(name = "Percentage", breaks= seq(0, 0.15, 0.05)) 
+
+```
+
+The following graph contains more app types, offering a more comprehensive view on the relation between country and app types than that in the above summary part. "Games","Social networking","Weather","Utilities","Music","Navigation" generally rank top six. 
+One thing to supplement is that app type "News" gains especially large amounts of votes from French users. 
+
+```{r, warning=FALSE, message=FALSE}
+newdata1=subset(newdata,Q19 %in% c("USA","China","France"))
+a=newdata1[,c(87:109)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q15_1))
+b2=as.integer(as.character(a$Q15_2))
+b3=as.integer(as.character(a$Q15_3))
+b4=as.integer(as.character(a$Q15_4))
+b5=as.integer(as.character(a$Q15_5))
+b6=as.integer(as.character(a$Q15_6))
+b7=as.integer(as.character(a$Q15_7))
+b8=as.integer(as.character(a$Q15_8))
+b9=as.integer(as.character(a$Q15_9))
+b10=as.integer(as.character(a$Q15_10))
+b11=as.integer(as.character(a$Q15_11))
+b12=as.integer(as.character(a$Q15_12))
+b13=as.integer(as.character(a$Q15_13))
+b14=as.integer(as.character(a$Q15_14))
+b15=as.integer(as.character(a$Q15_15))
+b16=as.integer(as.character(a$Q15_16))
+b17=as.integer(as.character(a$Q15_17))
+b18=as.integer(as.character(a$Q15_18))
+b19=as.integer(as.character(a$Q15_19))
+b20=as.integer(as.character(a$Q15_20))
+b21=as.integer(as.character(a$Q15_21))
+b22=as.integer(as.character(a$Q15_22))
+b23=as.integer(as.character(a$Q15_23))
+
+#summary table
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23))
+final["country"]=newdata1$Q19
+final[is.na(final)]=0
+datasummary=ddply(final,~country,summarise,q15_1=sum(b1),q15_2=sum(b2),q15_3=sum(b3),q15_4=sum(b4),q15_5=sum(b5),q15_6=sum(b6),q15_7=sum(b7),q15_8=sum(b8),q15_9=sum(b9),q15_10=sum(b10),q15_11=sum(b11),q15_12=sum(b12),q15_13=sum(b13),q15_14=sum(b14),q15_15=sum(b15),q15_16=sum(b16),q15_17=sum(b17),q15_18=sum(b18),q15_19=sum(b19),q15_20=sum(b20),q15_21=sum(b21),q15_22=sum(b22),q15_23=sum(b23))
+
+#calculate percentage
+total = rowSums(datasummary[,c("q15_1","q15_2","q15_3","q15_4","q15_5","q15_6","q15_7","q15_8","q15_9","q15_10","q15_11","q15_12","q15_13","q15_14","q15_15","q15_16","q15_17","q15_18","q15_19","q15_20","q15_21","q15_22","q15_23")])
+for (i in seq(1,nrow(datasummary))){
+  for (j in seq(2,ncol(datasummary)))
+  datasummary[i,j] = datasummary[i,j]/total[i]
+}
+
+data_type= melt(datasummary, id=c("country"))
+colnames(data_type)[2] = "AppType"
+levels(data_type$AppType)[1:23]=c("Navigation","Business","Catalogues","Travel","Books", "Photo & video", "Lifestyle","Entertainment", "Finance", "News", "Health & fitness", "Games", "Food & drink", "Education", "Medical", "Social networking", "Reference", "Sports", "Utilities", "Weather", "Productivity", "Music", "Other")
+
+ggplot(data_type,aes(AppType,value)) +geom_bar(fill="red",stat='identity')+xlab("APP Type")+ coord_flip()+facet_grid(.~country)+ scale_y_continuous(name = "Percentage", breaks= seq(0, 0.15, 0.05)) 
+
+```
+
+
+###Relation between country and AppStore
+AppStore have direct relation with devices, for example, Apple store is used for iPhone, Google Play/Android is used for devices with android os. So the data also reflects the popularity of those devices for each country.
+We calculate the percentage of app store in each country and choose three (Apple, Android and Nokia) to display. 
+The distribution of app store shows that both Apple and Android are highly used in China. It's not surprising that South Korea also has a high proportion of Android users, for Samsung, with android installed, is their famous domestic brand. 
+There's no doubt that China has a prospective market for mobile apps. 
+```{r, warning=FALSE, message=FALSE}
+
+newdata1=subset(newdata, select=c("Q19", "Q4" ))
+newdata1=subset(newdata1,Q19 %in% c("USA","China","France",  "South Korea","Australia"))
+newdata1=subset(newdata1, Q4 %in% c("Apple","Google Play/Android","Nokia"))
+
+colnames(newdata1)[1]="Country"
+colnames(newdata1)[2]="AppStore"
+
+newdata1$Country=factor(newdata1$Country)
+newdata1$AppStore=factor(newdata1$AppStore)
+
+ggplot(newdata1, aes(x= factor(Country), y = (..count..)/sum(..count..),fill = factor(AppStore))) +geom_bar(position = position_dodge(width = 0.9))+xlab("Country")+ylab("Percentage")+labs(fill="AppStore")
+
+
+
+
+```
+
+##Income
+
+###Relation between income and country.
+At first, we converted income to continuous data and drew the average income of each country. 
+```{r, warning=FALSE, message=FALSE}
+newdata1 = subset(newdata,select =c(Q19,Q29.2))
+v_country = c("USA","Japan","Mexico","Russia","South Korea","Spain","Australia","Brazil","UK","Canada","China","France","Germany","India")
+v_avg = c() #empty vector of average income
+for (i in v_country){
+  country = subset(newdata1,Q19 %in% c(i))
+  avg = sum(country$Q29.2,na.rm =TRUE)/nrow(country)
+  v_avg = union(v_avg,avg)
+}
+newdata1 = data.frame(v_country, v_avg)
+colnames(newdata1) = c("Country", "AverageIncome")
+#newdata1 = newdata1[with(newdata1, order(AverageIncome)),]
+#rownames(newdata1)=seq(1,14)
+ggplot(newdata1[!is.na(newdata1$AverageIncome) ,],aes(x=reorder(Country,AverageIncome),AverageIncome)) +geom_bar(stat="identity", fill="orange")+coord_flip() +xlab("Country")
+```
+
+However, we soon realized the mistake. As currency differs, the above chart is meaningless. So in the following analysis, income is taken as a categorical data.
+
+The bar chart below devided the participants into eleven categories. The result tells that Chinese subjects are most of high-level income, while those of USA and France are of low-level income. 
+
+We can target on high-level-income users when developing Chinese app and on low-level-income 
+users when creating French and American app. 
+
+```{r, warning=FALSE, message=FALSE}
+newdata1 = subset(newdata,Q19 %in% c("USA","China","France"))
+newdata1 = subset(newdata1,select = c(Q19,Q29.1))
+
+colnames(newdata1)[1]="Country"
+colnames(newdata1)[2]="Income"
+
+ggplot(newdata1[!is.na(newdata1$Income),],aes(Income)) +geom_bar(fill="violet")+xlab("Annual Income")+coord_flip()+facet_grid(.~Country)
+```
+
+###Relation between income and age
+Ages of high income people are from 24 to 50. 
+
+```{r, warning=FALSE, message=FALSE}
+library(heatmaply)
+newdata1 = subset(newdata,!is.na(Q17) & !is.na(Q29.1))
+newdata1 = subset(newdata1,select=c(Q17,Q29.1))
+colnames(newdata1) = c("Age", "Income")
+datasummary = ddply(newdata1, .(Age, Income), nrow)
+library(reshape2)
+datamatrix = dcast(datasummary, Age ~ Income)
+heatmaply(datamatrix[,c(2:13)], xlab="Annual Income", ylab="Age",label_names = c("Age", "Income", "value"), fontsize_col = 4,dendrogram = "none",plot_method = "plotly",column_text_angle=17) %>% 
+    layout(margin = list(l = 130, b = 40),yaxis=list(tickwidth = 10, tickfont=list(size=0)))#layout$yaxis$tickfont$size
+```
+
+###Relation between income and download frequency per month
+There's no unusual point in this graph. People with higher income download apps more frequently. 
+But we can infer from the graph that most "Prefer not to say" users have low income, for they matches the low-income user behavior. 
+
+```{r, warning=FALSE, message=FALSE}
+newdata1 = subset(newdata,!is.na(Q6) & !is.na(Q29.1))
+newdata1 = subset(newdata1, select = c(Q6,Q29.1))
+
+colnames(newdata1) = c("Downloads","Income")
+
+ggplot(newdata1,aes(Income), y = (..count..)/sum(..count..)) +geom_bar(fill="violet") + xlab("Annual Income") + ylab("#APP Downloads") + coord_flip()+facet_grid(.~Downloads, scales = "free") + geom_text(aes(y = (..count..)/tapply(..count..,..PANEL..,sum)[..PANEL..], label = scales::percent((..count..)/tapply(..count..,..PANEL..,sum)[..PANEL..]),hjust = -0.5), stat = "count",color = "firebrick") + theme(axis.text.x = element_text(angle = 30, hjust = 1))
+
+```
+
+###Relation among sex, APP type and income
+At first we go wrong by calculating the percentage based on income catalogue (not within facet). As the number of people in each facet is different (for example, high-income female is of low proportion, leading to low frequency in the last facet), it gives us a confusing result that male and female behavior contradict. 
+
+```{r, warning=FALSE, message=FALSE}
+newdata1 = subset(newdata,!is.na(Q16) & !is.na(Q29.1))
+a=newdata1[,c(87:109)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q15_1))
+b2=as.integer(as.character(a$Q15_2))
+b3=as.integer(as.character(a$Q15_3))
+b4=as.integer(as.character(a$Q15_4))
+b5=as.integer(as.character(a$Q15_5))
+b6=as.integer(as.character(a$Q15_6))
+b7=as.integer(as.character(a$Q15_7))
+b8=as.integer(as.character(a$Q15_8))
+b9=as.integer(as.character(a$Q15_9))
+b10=as.integer(as.character(a$Q15_10))
+b11=as.integer(as.character(a$Q15_11))
+b12=as.integer(as.character(a$Q15_12))
+b13=as.integer(as.character(a$Q15_13))
+b14=as.integer(as.character(a$Q15_14))
+b15=as.integer(as.character(a$Q15_15))
+b16=as.integer(as.character(a$Q15_16))
+b17=as.integer(as.character(a$Q15_17))
+b18=as.integer(as.character(a$Q15_18))
+b19=as.integer(as.character(a$Q15_19))
+b20=as.integer(as.character(a$Q15_20))
+b21=as.integer(as.character(a$Q15_21))
+b22=as.integer(as.character(a$Q15_22))
+b23=as.integer(as.character(a$Q15_23))
+
+#integrate catalogue of income
+levels(newdata1$Q29.1)[levels(newdata1$Q29.1)=="Prefer not to say"] = NA
+levels(newdata1$Q29.1)[1:3]="low"
+levels(newdata1$Q29.1)[2:4]="medium"
+levels(newdata1$Q29.1)[3:7]="high"
+
+#summary table
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23))
+final["Sex"]=newdata1$Q16
+final["Income"]=newdata1$Q29.1
+final[is.na(final)]=0
+datasummary=ddply(final,.(Sex,Income),summarise,q15_1=sum(b1),q15_2=sum(b2),q15_3=sum(b3),q15_4=sum(b4),q15_5=sum(b5),q15_6=sum(b6),q15_7=sum(b7),q15_8=sum(b8),q15_9=sum(b9),q15_10=sum(b10),q15_11=sum(b11),q15_12=sum(b12),q15_13=sum(b13),q15_14=sum(b14),q15_15=sum(b15),q15_16=sum(b16),q15_17=sum(b17),q15_18=sum(b18),q15_19=sum(b19),q15_20=sum(b20),q15_21=sum(b21),q15_22=sum(b22),q15_23=sum(b23))
+
+datasummary$q15_1 = datasummary$q15_1/sum(datasummary$q15_1)
+datasummary$q15_2 = datasummary$q15_2/sum(datasummary$q15_2)
+datasummary$q15_3 = datasummary$q15_3/sum(datasummary$q15_3)
+datasummary$q15_4 = datasummary$q15_4/sum(datasummary$q15_4)
+datasummary$q15_5 = datasummary$q15_5/sum(datasummary$q15_5)
+datasummary$q15_6 = datasummary$q15_6/sum(datasummary$q15_6)
+datasummary$q15_7 = datasummary$q15_7/sum(datasummary$q15_7)
+datasummary$q15_8 = datasummary$q15_8/sum(datasummary$q15_8)
+datasummary$q15_9 = datasummary$q15_9/sum(datasummary$q15_9)
+datasummary$q15_10 = datasummary$q15_10/sum(datasummary$q15_10)
+datasummary$q15_11 = datasummary$q15_11/sum(datasummary$q15_11)
+datasummary$q15_12 = datasummary$q15_12/sum(datasummary$q15_12)
+datasummary$q15_13 = datasummary$q15_13/sum(datasummary$q15_13)
+datasummary$q15_14 = datasummary$q15_14/sum(datasummary$q15_14)
+datasummary$q15_15 = datasummary$q15_15/sum(datasummary$q15_15)
+datasummary$q15_16 = datasummary$q15_16/sum(datasummary$q15_16)
+datasummary$q15_17 = datasummary$q15_17/sum(datasummary$q15_17)
+datasummary$q15_18 = datasummary$q15_18/sum(datasummary$q15_18)
+datasummary$q15_19 = datasummary$q15_19/sum(datasummary$q15_19)
+datasummary$q15_20 = datasummary$q15_20/sum(datasummary$q15_20)
+datasummary$q15_21 = datasummary$q15_21/sum(datasummary$q15_21)
+datasummary$q15_22 = datasummary$q15_21/sum(datasummary$q15_22)
+datasummary$q15_23 = datasummary$q15_23/sum(datasummary$q15_23)
+
+data_type= melt(datasummary, id=c("Sex","Income"))
+levels(data_type$variable)[1:23]=c("Navigation","Business","Catalogues","Travel","Books", "Photo & video", "Lifestyle","Entertainment", "Finance", "News", "Health & fitness", "Games", "Food & drink", "Education", "Medical", "Social networking", "Reference", "Sports", "Utilities", "Weather", "Productivity", "Music", "Other")
+
+data_type1 = data_type[data_type$variable %in% c("Travel","Entertainment", "Finance", "Health & fitness", "Games", "Food & drink", "Education", "Medical", "Social networking"),]
+
+ggplot(data_type1[!is.na(data_type1$Income),],aes(reorder_size(variable),value)) +geom_bar(fill="orange",stat='identity')+xlab("APP Type")+coord_flip()+facet_grid(Sex~Income,scales = "free") +ylab("Percentage")
+
+```
+
+The following codes calculate the percentage based on app types within each facet. 
+Now we can learn from the graph that female and male behavior is almost of the same pattern as the income increases.
+
+```{r, warning=FALSE, message=FALSE}
+newdata1 = subset(newdata,!is.na(Q16) & !is.na(Q29.1))
+a=newdata1[,c(87:109)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q15_1))
+b2=as.integer(as.character(a$Q15_2))
+b3=as.integer(as.character(a$Q15_3))
+b4=as.integer(as.character(a$Q15_4))
+b5=as.integer(as.character(a$Q15_5))
+b6=as.integer(as.character(a$Q15_6))
+b7=as.integer(as.character(a$Q15_7))
+b8=as.integer(as.character(a$Q15_8))
+b9=as.integer(as.character(a$Q15_9))
+b10=as.integer(as.character(a$Q15_10))
+b11=as.integer(as.character(a$Q15_11))
+b12=as.integer(as.character(a$Q15_12))
+b13=as.integer(as.character(a$Q15_13))
+b14=as.integer(as.character(a$Q15_14))
+b15=as.integer(as.character(a$Q15_15))
+b16=as.integer(as.character(a$Q15_16))
+b17=as.integer(as.character(a$Q15_17))
+b18=as.integer(as.character(a$Q15_18))
+b19=as.integer(as.character(a$Q15_19))
+b20=as.integer(as.character(a$Q15_20))
+b21=as.integer(as.character(a$Q15_21))
+b22=as.integer(as.character(a$Q15_22))
+b23=as.integer(as.character(a$Q15_23))
+
+#integrate catalogue of income
+levels(newdata1$Q29.1)[levels(newdata1$Q29.1)=="Prefer not to say"] = NA
+levels(newdata1$Q29.1)[1:3]="low"
+levels(newdata1$Q29.1)[2:4]="medium"
+levels(newdata1$Q29.1)[3:7]="high"
+
+#summary table
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23))
+final["Sex"]=newdata1$Q16
+final["Income"]=newdata1$Q29.1
+final[is.na(final)]=0
+datasummary=ddply(final,.(Sex,Income),summarise,q15_1=sum(b1),q15_2=sum(b2),q15_3=sum(b3),q15_4=sum(b4),q15_5=sum(b5),q15_6=sum(b6),q15_7=sum(b7),q15_8=sum(b8),q15_9=sum(b9),q15_10=sum(b10),q15_11=sum(b11),q15_12=sum(b12),q15_13=sum(b13),q15_14=sum(b14),q15_15=sum(b15),q15_16=sum(b16),q15_17=sum(b17),q15_18=sum(b18),q15_19=sum(b19),q15_20=sum(b20),q15_21=sum(b21),q15_22=sum(b22),q15_23=sum(b23))
+
+#calculate percentage
+total = rowSums(datasummary[,c("q15_1","q15_2","q15_3","q15_4","q15_5","q15_6","q15_7","q15_8","q15_9","q15_10","q15_11","q15_12","q15_13","q15_14","q15_15","q15_16","q15_17","q15_18","q15_19","q15_20","q15_21","q15_22","q15_23")])
+for (i in seq(1,nrow(datasummary))){
+  for (j in seq(3,ncol(datasummary)))
+  datasummary[i,j] = datasummary[i,j]/total[i]
+}
+
+data_type= melt(datasummary, id=c("Sex","Income"))
+levels(data_type$variable)[1:23]=c("Navigation","Business","Catalogues","Travel","Books", "Photo & video", "Lifestyle","Entertainment", "Finance", "News", "Health & fitness", "Games", "Food & drink", "Education", "Medical", "Social networking", "Reference", "Sports", "Utilities", "Weather", "Productivity", "Music", "Other")
+
+data_type1 = data_type[data_type$variable %in% c("Travel","Entertainment", "Finance", "Health & fitness", "Games", "Food & drink", "Education","Business", "Medical", "Social networking"),]
+
+ggplot(data_type1[!is.na(data_type1$Income),],aes(variable,value)) +geom_bar(fill="aquamarine3",stat='identity')+xlab("APP Type")+coord_flip()+facet_grid(Sex~Income,scales = "free")+ scale_y_continuous(name = "Percentage", breaks= seq(0, 0.15, 0.05)) 
+```
+
+###Relationship between Income and Apptype
+```{r, warning=FALSE, message=FALSE}
+newdata1 = newdata
+library(reshape2)
+a=newdata1[,c(87:109)]
+#change the factor type to integer type
+b1=as.integer(as.character(a$Q15_1))
+b2=as.integer(as.character(a$Q15_2))
+b3=as.integer(as.character(a$Q15_3))
+b4=as.integer(as.character(a$Q15_4))
+b5=as.integer(as.character(a$Q15_5))
+b6=as.integer(as.character(a$Q15_6))
+b7=as.integer(as.character(a$Q15_7))
+b8=as.integer(as.character(a$Q15_8))
+b9=as.integer(as.character(a$Q15_9))
+b10=as.integer(as.character(a$Q15_10))
+b11=as.integer(as.character(a$Q15_11))
+b12=as.integer(as.character(a$Q15_12))
+b13=as.integer(as.character(a$Q15_13))
+b14=as.integer(as.character(a$Q15_14))
+b15=as.integer(as.character(a$Q15_15))
+b16=as.integer(as.character(a$Q15_16))
+b17=as.integer(as.character(a$Q15_17))
+b18=as.integer(as.character(a$Q15_18))
+b19=as.integer(as.character(a$Q15_19))
+b20=as.integer(as.character(a$Q15_20))
+b21=as.integer(as.character(a$Q15_21))
+b22=as.integer(as.character(a$Q15_22))
+b23=as.integer(as.character(a$Q15_23))
+
+#integrate catalogue of income
+levels(newdata1$Q29.1)[levels(newdata1$Q29.1)=="Prefer not to say"] = NA
+levels(newdata1$Q29.1)[1:3]="low"
+levels(newdata1$Q29.1)[2:4]="medium"
+levels(newdata1$Q29.1)[3:7]="high"
+
+#summary table
+final=data.frame(cbind(b1,b2,b3,b4,b5,b6,b7,b8,b9,b10,b11,b12,b13,b14,b15,b16,b17,b18,b19,b20,b21,b22,b23))
+final["Income"]=newdata1$Q29.1
+final[is.na(final)]=0
+datasummary=ddply(final,~Income,summarise,q15_1=sum(b1),q15_2=sum(b2),q15_3=sum(b3),q15_4=sum(b4),q15_5=sum(b5),q15_6=sum(b6),q15_7=sum(b7),q15_8=sum(b8),q15_9=sum(b9),q15_10=sum(b10),q15_11=sum(b11),q15_12=sum(b12),q15_13=sum(b13),q15_14=sum(b14),q15_15=sum(b15),q15_16=sum(b16),q15_17=sum(b17),q15_18=sum(b18),q15_19=sum(b19),q15_20=sum(b20),q15_21=sum(b21),q15_22=sum(b22),q15_23=sum(b23))
+
+#calculate percentage
+total = rowSums(datasummary[,c("q15_1","q15_2","q15_3","q15_4","q15_5","q15_6","q15_7","q15_8","q15_9","q15_10","q15_11","q15_12","q15_13","q15_14","q15_15","q15_16","q15_17","q15_18","q15_19","q15_20","q15_21","q15_22","q15_23")])
+for (i in seq(1,nrow(datasummary))){
+  for (j in seq(2,ncol(datasummary)))
+  datasummary[i,j] = datasummary[i,j]/total[i]
+}
+
+data_type= melt(datasummary, id="Income")
+levels(data_type$variable)[1:23]=c("Navigation","Business","Catalogues","Travel","Books", "Photo & video", "Lifestyle","Entertainment", "Finance", "News", "Health & fitness", "Games", "Food & drink", "Education", "Medical", "Social networking", "Reference", "Sports", "Utilities", "Weather", "Productivity", "Music", "Other")
+
+data_type1 = data_type[data_type$variable %in% c( "Finance", "Health & fitness", "Games", "Food & drink", "Education","Business", "Social networking", "Sports"),]
+data_type1$variable = factor(data_type1$variable)
+data_type1 = subset(data_type1,!is.na(Income))
+data_type1 = dcast(data_type1, variable ~ Income)
+
+library(plotly)
+plot_ly(data_type1, x = ~variable, y = ~low, type = 'bar', name = 'low') %>%
+  add_trace(y = ~medium, name = 'medium') %>%
+  add_trace(y = ~high, name = 'high') %>%
+  layout(xaxis = list(title = 'App Type'), 
+         yaxis = list(title = 'Percentage'), barmode = 'group')
+
+```
+
+#Conclusion
+
+##Limitation
+
+- The survey was carried out in 2012, not very representative for the user behavior of mobile apps in recent years. 
+
+- As the dataset comes from a survey, answers for the open questions are hard to interpret and failed to display in the graph. 
+
+- Most of our graph is bar chart, for data types are mainly categorical. 
+
+
+##Future directions
+
+- Try different graph types, such as scatter plot, fluctuation diagram and etc. 
+
+- The survey concludes 30 questions, now we mainly focused on App types. The next step is to explore other features. 
+
+
+##Lessons learned
+
+- Data cleaning is an important step for plotting. A clean dataset can make future jobs easier a lot. 
+
+- Bar chart is the most favorable choice for categorical data. We tried many other graph types such as mosaic, but in most cases, bar chart gives a clearest expression for categorical data.  
+
+- Too fancy image may exert an adverse impact on intuition and fail to deliver the essence.
