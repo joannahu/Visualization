@@ -1,0 +1,117 @@
+---
+title: "Homework3,uni:qh2174"
+output: html_notebook
+---
+Q1. Mosaic plots [10 points] Use a mosaic plot (or plots) to display the Punishment dataset in the vcd package. What patterns of association do you see between
+the conditioning (independent / explanatory) variables and the response
+(dependent) variable? Discuss single factor patterns as well as two and three
+factor interactions.
+Answer:
+This dataset studies about the attitude towards corporal punishment of children. 
+A data frame with 36 observations and 5 variables.
+Freq: frequency.
+attitude: factor indicating attitude: (no, moderate) punishment of children.
+memory: factor indicating whether the person had memories of corporal punishment as a child (yes, no).
+education: factor indicating highest level of education (elementary, secondary, high).
+age: factor indicating age group in years (15-24, 25-39, 40-).
+
+```{r}
+data(Punishment, package="vcd")
+vcd::mosaic(attitude ~ education, data = Punishment,direction = c("v", "h"))
+```
+From single relationship between attitude and education, we can see people with higher education are more likely to support no punishment on children. 
+
+```{r}
+data(Punishment, package="vcd")
+vcd::mosaic(memory ~ age, data = Punishment,direction = c("v", "h"))
+```
+From single relationship between memory and age, we can see younger people are les likely to have punishment as a child, meaning now child punishment becomes less now. 
+
+```{r}
+vcd::mosaic(attitude ~ education + age, data = Punishment,direction = c("v", "v", "h"), highlighting_direction="down", highlighting_colot="red")
+```
+From graph, we can see that education have a major impact on the attitude towdars punishment. 
+
+```{r}
+vcd::mosaic(memory ~ education + age, data = Punishment,direction = c("v", "v", "h"), highlighting_direction="top")
+```
+From the above graph, we know that people with age 15-24 have few momery of punishment. 
+
+Q2: Heatmaps [20 points] Use heatmaps to explore the sample sales dataset
+"WA_Sales_Products_2012-14.csv" (88475 rows x 11 columns) found here:
+https://www.ibm.com/communities/analytics/watson-analytics-blog/sales-products-sample-data/
+Include 3 heatmaps in your assignment and describe the patterns you found.
+Answer:
+```{r}
+library(gplots)
+sales <- read.csv ("WA_Sales_Products_2012-14.csv") 
+df<-data.frame(sales$Quarter, sales$Revenue,sales$Quantity, sales$Gross.margin)
+df_aggregate<-aggregate(df[,c(2,3,4)],list(df[,1]),sum)
+colnames(df_aggregate) <- c("YearQuarter", "Revenue", "Quantity", "Gross.margin")
+df_aggregate_del<-df_aggregate[,c(2,3,4)]
+heatmap.2(as.matrix(df_aggregate_del), scale="column", trace="none")
+```
+We can see there's some data missing for Gross.margin
+```{r}
+library(heatmaply)
+heatmaply(df_aggregate_del, dendrogram = "none") %>% 
+    layout(margin = list(l = 130, b = 40))
+```
+
+```{r}
+library(ggthemes)
+theme_heat <- theme_classic(14) +
+    theme(axis.line = element_blank(),
+          axis.ticks = element_blank())
+
+vscale <- function(x) as.vector(scale(x))
+df_new<-data.frame(sales$Year,sales$Quarter, sales$Revenue)
+df_new_agg<-aggregate(df_new[,3],list(df_new[,2]),sum)
+df_split<-data.frame(substr(df_new_agg$Group.1,4,7),substr(df_new_agg$Group.1,1,2),df_new_agg$x)
+colnames(df_split) <- c("Year","Quarter", "Revenue")
+#df_scaled<-data.frame(df_split,vscale(df_split$Revenue))
+scaledvalue=vscale(df_split$Revenue)
+g <- ggplot(df_split, aes(Year, Quarter, fill = scaledvalue)) + 
+    geom_tile() +
+    scale_fill_viridis() + theme_heat +
+    theme(axis.text.y = element_blank())
+g 
+```
+From the graph,we can learn that the revenue increases as each quarter passes by. But the last quarter (2014 Q3) has a large drop, maybe because the quarter doesn't end when the statistic is carried out. 
+
+
+Q3:
+Missing values [20 points] Use the techniques in Chap. 9 (to be discussed in
+class) to visually explore patterns of missing data in the College Scorecard Data
+found here: https://collegescorecard.ed.gov/data/
+Do not choose the large green "download all data" button but rather, the first
+choice under "featured downloads": Scorecard data 5 MB CSV
+(7703 rows x 122 columns)
+Sample and/or subset as you wish. Include 3 graphs that show missing
+patterns. Describe the patterns you see. Choose the missing data patterns of a
+single variable (or single group of variables) to discuss in more detail, drawing
+on insight gleaned from the documentation, in addition to the graphs. Discuss
+possible causes for the missing data patterns, and potential biases which might
+result from these patterns. The documentation is available here:
+https://collegescorecard.ed.gov/assets/FullDataDocumentation.pdf
+Answer:
+```{r}
+library(extracat)
+scorecard <- read.csv ("Most-Recent-Cohorts-Scorecard-Elements.csv")
+is.na(scorecard) <- scorecard == "NULL"
+part1 = scorecard[,c(1:41)]
+visna(part1, sort="b")
+```
+From the graph, we can find that there're many SAT and ACT score missing. 
+
+```{r}
+part2 = scorecard[,c(42:82)]
+visna(part2, sort="b")
+```
+From above graph, almost there's no missing data in PCIP. It's the pecentage of . degrees awarded in each two-digit CIP code field of study. 
+
+```{r}
+scorecard_ordered <-reorder(scorecard$INSTNM, scorecard$SATVR25 , function(x) sum(is.na(x)))
+fluctile(xtabs(is.na(scorecard$SATVR25) ~ scorecard$INSTNM + scorecard$DISTANCEONLY, data=scorecard))
+```
+Many non distance school miss SATVR25
