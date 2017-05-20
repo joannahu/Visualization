@@ -1,0 +1,204 @@
+---
+title: 'title: EDA Homework2'
+output:
+  html_notebook: default
+---
+#Part I
+##Chapter 4 #5 Occupational mobility
+According to the R help page, the Yamaguchi87 dataset in vcdExtra has become a classic for models comparing two-way mobility tables.
+(a) How do the distributions of occupations of the sons in the three countries compare?
+```{r}
+library(vcdExtra)
+library(ggplot2)
+library(dplyr)
+data(Yamaguchi87)
+ggplot(Yamaguchi87, aes(Son,Freq)) + geom_bar(stat="identity") + coord_cartesian(ylim=c(0, 5200))+facet_wrap(~Country)
+```
+From the graph, we learn in US most sons' occupation is UpNM and LoM, in UK, it's LoM, while in Japen, almost at the same level. 
+
+(b) How do the distributions of the sons?? and fathers?? occupations in the UK compare?
+```{r}
+library(vcdExtra)
+library(ggplot2)
+library(dplyr)
+data(Yamaguchi87)
+ukdata<-filter(Yamaguchi87,Country=="UK")
+
+ukson<-ukdata[,c(1,4)]
+ukfather<-ukdata[,c(2,4)]
+#uk<-cbind(ukson,ukfather)
+
+v=matrix(nrow=nrow(ukson),ncol=1)
+v[,1]="Son"
+ukson<-cbind(ukson,v)
+colnames(ukson)<-c("Job","Freq","Role")
+
+v=matrix(nrow=nrow(ukfather),ncol=1)
+v[,1]="Father"
+ukfather<-cbind(ukfather,v)
+colnames(ukfather)<-c("Job","Freq","Role")
+
+uk<-rbind(ukson,ukfather)
+
+ggplot(uk, aes(Job,Freq)) + geom_bar(stat="identity") + coord_cartesian(ylim=c(0, 4000))+facet_wrap(~Role)  + ggtitle("Country: UK")
+
+```
+Five status categories -- upper and lower nonmanuals (UpNM, LoNM), upper and lower manuals (UpM, LoM), and Farm) are used for both fathers' occupations and sons' occupations.
+From the graph, we can see that most son and father are LoM(lower manuals). However, Father has more Farm occupation than son. Son has more UpNM(upper nonmanuals) occupation than Father. It makes sense with the development of age. 
+
+(c) Are you surprised by the results or are they what you would have expected?
+Yes. Most occupation keep the same from father to son, except UpNM and Farm. 
+
+##Chapter 4 #6 Whisky
+
+The package bayesm includes the dataset Scotch, which reports which brands of whisky 2218 respondents consumed in the previous year.
+(a) Draw a barchart of the number of respondents per brand. What ordering of the brands do you think is best?
+```{r}
+data(Scotch,package="bayesm")
+count <- colSums(Scotch)
+count = data.frame(count)
+brands=rownames(count)
+data <-cbind(brands,count)
+ggplot(data, aes(x=brands,y=count)) + geom_bar(aes(fill = brands),stat="identity") + coord_cartesian(ylim=c(0, 820))
+```
+Chivas.Regal is the best, for it wins the most responds. 
+
+(b) There are 20 named brands and a further category Other.brands. That entails drawing a lot of bars. If you decided to plot only the biggest brands individually and group the rest all together in the "Other" group, what cutoff would you use for defining a big brand?
+I will define the brand with most responsds as the biggest brand.
+
+(c) Another version of the dataset called whiskey is given in the package flexmix. It is made up of two data frames, whiskey with the basic data, and whiskey_brands with information on whether the whiskeys are blends or single malts. How would you incorporate this information in your graphics, by using colour, by using a different ordering, or by drawing two graphics rather than one?
+```{r}
+data(whiskey, package="flexmix")
+count <- colSums(whiskey)
+count = data.frame(count)
+brand=rownames(count)
+for(i in 2:length(brand))
+brand[i]=substring(brand[i], 11)
+
+whiskeybasic <-cbind(brand,count)
+whiskeybasic <- whiskeybasic [-1,]
+whiskeybrand=na.omit(whiskey_brands)
+whiskeyall=merge(x = whiskeybasic, y = whiskeybrand, by.x="brand",by.y="Brand", all.x = FALSE,all.y=FALSE)
+ggplot(whiskeyall, aes(brand,count)) + geom_bar(aes(fill = brand),stat="identity") + coord_cartesian(ylim=c(0, 250))+facet_wrap(~Type)  + ggtitle("Comparison of Type")
+ggplot(whiskeyall, aes(brand,count)) + geom_bar(aes(fill = brand),stat="identity") + coord_cartesian(ylim=c(0, 250))+facet_wrap(~Bottled)  + ggtitle("Comparison of Bottled")
+
+```
+
+
+(d) Which of the spellings, "whisky" or "whiskey", is more appropriate for this dataset?
+Whiskey is more appropriate. 
+
+
+
+Chapter 5 #8 Olive oils from Italy
+The olive oils dataset is well known and can be found in several packages, for instance as olives in extracat. The original source for the data is the paper [Forina et al., 1983].
+(a) Draw a scatterplot matrix of the eight continuous variables. Which of the fatty acids are strongly positively associated and which strongly negatively associated?
+```{r}
+library(extracat)
+library(GGally)
+ggpairs(olives[,c(3:10)],diag=list(continuous='density'))
+```
+From the corr parameter in the figure, we can tell that palmitic and palmitoleic are strongly positively associated(0.836). And oleic are strongly negatively assoicated with palmitic,palmitoleic,linoleic(-0.837,-0.852,-0.85). 
+
+(b) Are there outliers or other features worth mentioning?
+Apparently we can see there're outliers. Although oleic and palmitic has strong negatively associated, but there are a outlier can impact the result. It happens to the same for the Palmitole and palmitic.
+
+##Chapter 5 #10 Hertzsprung-Russell
+The Hertzsprung-Russell diagram is a famous scatterplot of the relationship between the absolute magnitudes of stars and their effective temperatures and is over one hundred years old. Although examples of the plot can be found all over the place, it is surprisingly difficult to find the data underlying them. There is a dataset of 47 cases, starsCYG, in the package robustbase, but that is really too small. The dataset HRstars with 6220 stars in package GDAdata is from the Yale Trigonometric Parallax Dataset and was downloaded from [Mihos, 2005].
+(a) Plot Y against X. How does your plot differ from the plots you find on the web, for instance from a Google search for images of the HertzsprungRussell diagram?
+```{r}
+#data(starsCYG,package="robustbase")
+data(HRstars,package="GDAdata")
+#The formula to convert V to Absolute Magnitude is: AM = V + 5*(1 + log10(Para)). 
+ggplot(HRstars, aes(BV, HRstars$V+5*(1+log10(HRstars$Para))))+geom_point(size =0.5,alpha = 0.08)+ylab("Absolute Magnitude")+xlab("Temperature")+xlim(-0.5, 4.5)+ylim(-11,20)+scale_y_reverse()
+```
+
+It's similar with the picture on wikipedia, except the difference in color, x and y limit. 
+<https://en.wikipedia.org/wiki/Hertzsprung%E2%80%93Russell_diagram#/media/File:HRDiagram.png>
+
+(b) The plots seem to use different numbers of stars. Are some more likely to be used than others?
+Pictures online use less star, with outliers removed and narrower x/y limitation.
+(c) You can colour and annotate your plot using techniques described in Chapter 13. What would you suggest?
+I would change the axis limit and color.
+```{r}
+ggplot(HRstars, aes(BV, HRstars$V+5*(1+log10(HRstars$Para))))+geom_point(size =0.5,alpha = 0.08,color='darkblue')+ylab("Absolute Magnitude")+xlab("Temperature")+xlim(-0.5, 2.5)+ylim(-11,20)+scale_y_reverse()
+
+```
+
+
+
+##Chapter 6 #5 Bodyfat
+The dataset bodyfat is available in the MMST package. It provides estimates of the percentage of body fat of 252 men, determined by underwater weighing, and body circumference measurements. The dataset is used as a multiple regression example to see if body fat percentage can be predicted using the other measurements. Draw a parallel coordinate plot for the dataset.
+```{r}
+require(devtools)
+data(bodyfat,package="MMST")
+ggparcoord(data = bodyfat, scale="uniminmax",groupColumn = "bodyfat", alphaLines=0.4) +xlab("") + ylab("")
+```
+(a) Are there any outliers? What can you say about them?
+(b) Can you deduce anything about the height variable?
+(c) What can you say about the relationship between the first two variables, density and bodyfat?
+(d) Do you think the ordering of the variables is sensible? What alternative orderings might be informative?
+
+
+##Chapter 6 #7Wine
+The wine dataset can be found in the packages gclus, MMST, pgmm, and rattle. They took the data from the UCI Machine Learning Repository [Bache and Lichman, 2013]. The original source is an Italian software package [Forina et al., 1988]. The version in pgmm has about twice as many variables as the others, and the version in MMST includes the names of the three classes of wine, rather than the numeric coding that the other versions use.
+(a) Use pcp's to investigate how well the variables separate these classes.
+```{r}
+data(wine,package="gclus")
+```
+
+```{r}
+data(wine,package="MMST")
+
+ggparcoord(wine, scale="globalminmax",groupColumn= "class", order="anyClass", alphaLines=0.3) + 
+  theme( axis.ticks.y = element_blank(), axis.text.y = element_blank())
+```
+(b) Are there any outliers?
+(c) Is there evidence of subgroups within the classes?
+
+
+Part II
+Dataset I: Yamaguchi87
+We can investigate the relationship between father occupation and son occupation. For example, how much percent does the son follow the same occupation as the father's?
+Here I will do an investigation on UpNM and Farm of US. 
+```{r}
+data<-filter(Yamaguchi87,Country=="US"&Father=="UpNM")
+nSame = filter(data,Son=="UpNM")$Freq %>% sum()
+nDiff = filter(data,Son!="UpNM")$Freq %>% sum()
+percentage = nSame/(nSame+nDiff)
+r1=c("UpNM",percentage)
+
+data<-filter(Yamaguchi87,Country=="US"&Father=="Farm")
+nSame = filter(data,Son=="Farm")$Freq %>% sum()
+nDiff = filter(data,Son!="Farm")$Freq %>% sum()
+percentage = nSame/(nSame+nDiff)
+r2=c("Farm",percentage)
+
+r=rbind(r1,r2)
+colnames(r)<-c("Job","Pct")
+r<-data.frame(r)
+ggplot(r, aes(Job,Pct)) + geom_bar(stat="identity") + coord_cartesian(ylim=c(0,2))
+
+```
+
+
+Dataset II: whiskey
+We can try to find whether there's the relationship between Type of a whiskey and its exportation. 
+```{r}
+nBF=filter(whiskey_brands,Type=="Blend" & Bottled=="Foreign") %>% nrow()
+nBD=filter(whiskey_brands,Type=="Blend" & Bottled=="Domestic") %>% nrow()
+nSF=filter(whiskey_brands,Type=="Single Malt" & Bottled=="Foreign") %>% nrow()
+nSD=filter(whiskey_brands,Type=="Single Malt" & Bottled=="Domestic") %>% nrow()
+data<-c(nBF,nBD,nSF,nSD)
+data<-data.frame(data)
+name<-c("bland&foreign","bland&Domestic","single&foreign","single&domestic")
+cbind(name,data)
+ggplot(data, aes(name,data)) + geom_bar(aes(fill = name), stat="identity") + coord_cartesian(ylim=c(0,15))+ylab("freq")
+
+```
+
+
+
+
+
+

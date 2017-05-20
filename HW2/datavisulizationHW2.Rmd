@@ -1,0 +1,289 @@
+---
+title: "HW1"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Problem 1
+## (5)
+###(a)
+Since different countries has different populations, I decided to use percentge rather than frequency.
+
+Most sons are distributed in US. The distribution is similar in US and UK, but US has larger population and focuses more on UPNM.
+Japan has different distribution from US and UK. Most sons have LoNM occupations in Japan, but most sons have LoM occupations in US and UK. 
+```{r}
+library(ggplot2)
+library(scales)
+library(dplyr)
+library(vcdExtra)
+data(Yamaguchi87,package="vcdExtra")
+library(tidyverse)
+library(scales)
+library(plyr)
+#group by the data without the father column
+data1=
+  Yamaguchi87 %>% 
+  group_by(Son,Country) %>% 
+  summarize(Freqprect =Freq/sum(Freq))
+
+  Yamaguchi87 %>% 
+  group_by(Son,Country) %>% 
+  summarize(Freqprect =Freq/sum(Freq))
+
+#a1<-ggplot(data=subset(data1,data1$Country=="US"), aes(x=Son, y=Freq)) +
+ # geom_bar(stat="identity",fill="blue")+xlab("US")+ylim(0, 5500)
+#a2<-ggplot(data=subset(data1,data1$Country=="Japan"), aes(x=Son, y=Freq)) +
+ # geom_bar(stat="identity",fill="red")+xlab("Japan")+ylim(0, 5500)
+#a3<-ggplot(data=subset(data1,data1$Country=="UK"), aes(x=Son, y=Freq)) +
+ # geom_bar(stat="identity",fill="yellow")+xlab("UK")+ylim(0, 5500)
+
+a1<-ggplot(data=subset(Yamaguchi87,Yamaguchi87$Country=="US"), aes(x=Son, y=Freq)) +
+  geom_bar(stat="identity",fill="blue")+xlab("US")+ylim(0, 5500)+scale_y_continuous(labels = percent_format()) 
+a2<-ggplot(data=subset(Yamaguchi87,Yamaguchi87$Country=="Japan"), aes(x=Son, y=Freq)) +
+  geom_bar(stat="identity",fill="red")+xlab("Japan")+ylim(0, 5500)+scale_y_continuous(formatter = 'percent')
+a3<-ggplot(data=subset(Yamaguchi87,Yamaguchi87$Country=="UK"), aes(x=Son, y=Freq)) +
+  geom_bar(stat="identity",fill="yellow")+xlab("UK")+ylim(0, 5500)+scale_y_continuous(formatter = 'percent')
+
+grid.arrange(a1, a2, a3, nrow=1)
+#percent data
+percenttable=group_by(Yamaguchi87,Country) %>% mutate(percent = Freq/sum(Freq))
+ggplot(percenttable, aes(x=Son, y=percent,fill=Son)) +
+  geom_bar(stat="identity")+facet_grid(~Country) +
+   scale_y_continuous(labels=percent)
+########
+ggplot(Yamaguchi87, aes(x=Son, y=Freq,fill=Son)) +
+  geom_bar(stat = "summary",fun.y="percent")+facet_grid(~Country) +
+   scale_y_continuous(name="Proportion ")
+
+    ggplot(Yamaguchi87, aes(x= Son)) + 
+    geom_bar(aes(y =(Freq)/sum(Freq))) +
+    facet_grid(~Country) +
+    scale_y_continuous(labels=percent)
+library(ddply)
+df.new<-dplyr(Yamaguchi87,.(Country),summarise,
+              prop=prop.table(table(Son)),
+              Son=names(table(Son)))
+```
+
+###(b)
+They have different distributions. Most sons and fathers have LoM and UpM oppucations, but sons has much more UpNM occupations and less Farm oppcupations than father, which makes senses with the development of the age
+
+```{r}
+library(reshape2)
+#reshape the data
+data1 <- melt(subset(Yamaguchi87,Yamaguchi87$Country=="UK"), id.vars=c("Country","Freq"))
+percenttable=group_by(data1,variable) %>% mutate(percent = Freq/sum(Freq))
+
+ggplot(percenttable, aes(x=value, y=percent,fill=value)) +
+  geom_bar(stat="identity")+facet_grid(~variable) +xlab("UK")+
+   scale_y_continuous(labels=percent)
+
+########################
+totlpopulation=sum(subset(Yamaguchi87,Yamaguchi87$Country=="UK")$Freq)
+a1<-ggplot(data=subset(Yamaguchi87,Yamaguchi87$Country=="UK"), aes(x=Son,y=Freq/totlpopulation,fill=Son)) +geom_bar(stat="identity")+xlab("Son")
+a2<-ggplot(data=subset(Yamaguchi87,Yamaguchi87$Country=="UK"), aes(x=Father, y=Freq/totlpopulation,fill=Father)) +
+  geom_bar(stat="identity")+xlab("Father")
+
+
+grid.arrange(a1, a2, nrow=1)
+##percent data
+
+
+```
+
+###(6)
+###(a)
+The Chivas.Regal pefroms the best  and the.Singleton performs the worst.
+```{r}
+data(Scotch,package="bayesm")
+summary(Scotch)
+library(ggplot2)
+library(reshape2)
+library(dplyr)
+datasummary=melt(Scotch) %>%
+            group_by(variable) %>% 
+            summarise(value=sum(value))
+graph1=ggplot(datasummary, aes(x=variable, y=value,fill=variable)) +
+  geom_bar(stat="identity") +xlab("Whisky")+ylab("Ordering")+
+      theme(
+          axis.text.x = element_blank(),
+          axis.ticks = element_blank())
+   
+   graph1+scale_fill_discrete(name="Whisky")
+  
+
+```
+
+###(b)
+I will define the big brand based on the respondent counts. I will define the brand with most respondent counts as the big brand
+
+###(c)
+don't need to plot only need to explain
+```{r}
+#data cleaning
+data(whiskey,package="flexmix")
+whiskeyinfo=data.frame(whiskey$Incidence,whiskey$Freq)
+whiskeyinfo=melt(whiskeyinfo,"whiskey.Freq")  %>% 
+            group_by(whiskey.Freq,variable) %>% 
+            summarize(value=sum(value))
+#change the datatype as factor
+whiskeyinfo$variable=as.factor(whiskeyinfo$variable)
+
+#make sure the common column will be consistent
+whiskey_brands$Brand=unique(whiskeyinfo$variable)
+#merge the data (left join)
+whiskeytotal=merge(x = whiskeyinfo, y = whiskey_brands, by.x="variable",by.y="Brand", all.x = TRUE)
+#change the first column name as brand
+names(whiskeytotal)[1]="Brand"
+whiskeyfinal=data.frame(whiskeytotal,whiskeytotal$whiskey.Freq*whiskeytotal$value)
+names(whiskeyfinal)[6]="counts"
+#Clean the table
+whiskeyfinal=whiskeyfinal[c(1,4,5,6)] %>% 
+            group_by(Brand,Type,Bottled) %>% 
+            summarize(counts=sum(counts))
+#check the summary
+summary(whiskeyfinal)
+
+
+```
+###d
+whiskey. Since whisky has foreigns brands but whiskey should from Scotland 
+###8
+###(a)----drive a line?
+oleic and palmitic,oleic and palmitoleic,oleic and linoleic are strongly negatively assoicated.
+
+
+
+palmitoleic and palmitic, are stongly postively associated
+```{r}
+require(ggplot2)
+require(GGally)
+data(olives,package="extracat")
+ggpairs(olives[,c(3:10)],diag=list(continuous='density'),axislabels='none')
+
+```
+
+###(b)
+They are some obvious outliers in some scatterplots: Although oleic and palmitic has strong negatively associated, but there are a outlier can impact the result. It happens to the same for the Palmitole and palmitic.
+
+###10
+####(a)
+http://burro.astr.cwru.edu/Academics/Astr221/HW/HW5/HR-sm.gif
+It looks similar but we use the different color to represents the points and the background color is
+different too. The xlimit and ylimit are different
+```{r}
+####should i limit it or keep origins???
+data(starsCYG,package="robustbase")
+data(HRstars,package="GDAdata")
+starplot=ggplot(HRstars, aes(BV, HRstars$V+5*(1+log10(HRstars$Para))))+geom_point(size =0.5,alpha = 0.08)+ylab("Absolute Magnitude")+xlab("Temp")+xlim(-0.5, 4.5)+ylim(-11,20)
+
+starplot+scale_y_reverse()
+
+```
+####(b)
+it seems like that the graph I found online use less stars than what I have plotted since the xlimit and ylimit are different from mine. The online image removes the outliers and limit the axies.
+
+####(c)
+I would removes the outliers and color the points as the blue or brighter colors as below. In this way, I can make the graph looks more clearer.
+```{r}
+####should i limit it or keep origins???
+
+starplot=ggplot(HRstars, aes(BV, HRstars$V+5*(1+log10(HRstars$Para))))+geom_point(size =0.5,alpha = 0.08,color='blue')+ylab("Absolute Magnitude")+xlab("Temp")+xlim(-0.5, 2.5)+ylim(-11,20)
+
+starplot+scale_y_reverse()
+
+```
+
+###Chapter 6
+####(5)
+
+```{r}
+require(devtools)
+data(bodyfat,package="MMST")
+ggparcoord(data = bodyfat, scale="uniminmax",groupColumn = "bodyfat", alphaLines=0.4) +xlab("") + ylab("")
+
+#ggparcoord(data = bodyfat, columns = c(1,3:15), scale="uniminmax",groupColumn = "bodyfat", #alphaLines=0.4) +xlab("") + ylab("")
+
+
+
+```
+####(a)
+As you can see above, there are  outliers on the top of the graph and all the distribution looks skewed to the right because most of lines are packed into the foot of the plot. There also some outliers on the bottom of the graph since few lines are close to the x=0.
+also, we can check the boxplot as below, which proves my analysis
+```{r}
+boxplot(bodyfat)
+```
+
+####(b)
+No, From the pcp plot, it does not look skewed.  
+Also, as you can see from the boxplot below,   when I check the boxplot of the height data, there is no outliers
+```{r}
+boxplot(bodyfat$height)
+```
+
+####(c)
+As you can see from the graph, as the density becomes larger, the bodyfat is smaller since the line color will be darkder, which is negative correlated
+
+####(d)
+
+Do you have order is sensiable? plot the graph as you can see below
+
+Yes, we can sorted the variables by their maximum values after standardisation by mean and standard deviation so that possible outliers are easier to see. Also, we can sorted by each median of the variable in decreasing order since in general,he variability increases with higher values, especially for the top few variables.
+```{r}
+m2 <- apply(bodyfat, 2, median, na.rm=TRUE)
+m2a <- order(m2)
+ggparcoord(bodyfat, scale="globalminmax", order= m2a, alphaLines=0.3) + coord_flip()
+```
+####(7)
+
+####(a)
+Flav does a great job since there are only few overlap among these three classes.
+
+Other variables have more overlap among these three classes.
+```{r}
+data(wine,package="MMST")
+
+ggparcoord(wine, scale="globalminmax",groupColumn= "class", order="anyClass", alphaLines=0.3) + 
+  theme( axis.ticks.y = element_blank(), axis.text.y = element_blank())
+```
+
+####(b)
+
+Yes, as you can see from the graph below, variables, flav,hue,AlcAsh, Ash, have the lines that are not within the regular ranges.
+
+```{r}
+ggparcoord(wine,columns=c(1:13),groupColumn= "class", order="anyClass", alphaLines=0.3) + 
+  theme( axis.ticks.y = element_blank() )
+```
+
+####(c)
+Yes, from the graph, proline has green and blue lines seperate into groups, so I think there are subgroups in Barbera and Barolo.
+
+##Problem 2
+Choose two datasets from the above exercises. For each, provide insight, through graphs and text, on an issue that goes beyond those discussed in the homework exercises. Any type of graph is permitted, whether or not covered in class, so you may take this as an opportunity to explore new options. 
+
+###wiskey Dataset
+as you can see from this graph, 18 whiskeys are from foreign.Three of them are from Domesitic.The brand,Chivas Regal, is the most popular one.
+```{r}
+
+
+ggplot(subset(whiskeyfinal,Bottled==c("Domestic") | Bottled==c("Foreign")), aes(x=Brand, y=counts,fill=Brand)) + ylab("sales")+
+  geom_bar(stat="identity")+facet_grid(~Bottled)+theme(axis.text.x = element_text(angle = 60, hjust = 1))
+
+
+```
+
+###Bodyfat Dataset
+
+
+```{r}
+cormat <- round(cor(bodyfat),2)
+melted_cormat <- melt(cormat)
+ggplot(data = melted_cormat, aes(x=Var1, y=Var2, fill=value)) + 
+  geom_tile()
+
+
+```
